@@ -1,0 +1,2 @@
+ 
+PYTHONPATH=. pytest -rP tests/test_generator.py > tests_output
