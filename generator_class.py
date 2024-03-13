@@ -18,6 +18,7 @@ class Nets:
         self.dev2 = dev2
         self.p2   = p2
         self.route = []
+        self.compress = False
 
         # tlef definitions
 
@@ -42,7 +43,92 @@ class Nets:
         #print('Adding route: '+str(nr))
         self.route.append(nr)
 
-    def compress_routes(self):
+    def compress_routes(self, debug=False):
+
+        if self.compress:
+            raise Exception("Routes already compressed")
+
+        self.compress = True
+
+        def check_inner(r_list, node, head=False):
+            # that inner node is not inside
+            if len(r_list) > 4:
+                if node in r_list[2:-3]:
+                    if debug: print(str(node)+" is inner")
+                    # get sub list
+                    ii = r_list.index(node)
+                    if head:
+                        l_list = r_list[:ii-1]
+                    else:
+                        l_list = r_list[ii-1:]
+                    # if head reverse list
+                    l_list = list(reversed(l_list))
+                    # reinsert list
+                    if head:
+                        r_list = l_lsit+r_list[ii:]
+                    else:
+                        r_list = r_list[:ii]+l_list
+                    
+                    if debug: print("new list: "+r_list)
+                else:
+                    if head:
+                        r_list.insert(0, node)
+                    else:
+                        r_list.append(node)
+            else:
+                if head:
+                    r_list.insert(0, node)
+                else:
+                    r_list.append(node)
+
+        nr = []
+        count = 0
+        r_len = len(self.route)
+
+        while len(nr) < r_len:
+            if debug: print("sr:"+str(len(self.route))+":"+str(self.route))
+            if len(nr)>=1 and debug:
+                print("nr:"+str(len(nr))+":"+str(nr))
+            for ind, r in enumerate(self.route):
+                if len(nr) < 1:
+                    self.route.pop(ind)
+                    nr.append(r[0])
+                    nr.append(r[1])
+                else:
+                    if debug: print("r:"+str(r))
+                    if r[0] == nr[0]:
+                        if debug: print(str(r[0])+" at head")
+                        check_inner(nr, r[1], head=True)
+                        self.route.pop(ind)
+                        break
+                        #rn.insert(0, r[1])
+                    elif r[0] == nr[-1]:
+                        if debug: print(str(r[0])+" at tail")
+                        check_inner(nr, r[1], head=False)
+                        self.route.pop(ind)
+                        break
+                        #rn.append(r[1])
+                    elif r[1] == nr[0]:
+                        if debug: print(str(r[1])+" at head")
+                        check_inner(nr, r[0], head=True)
+                        self.route.pop(ind)
+                        break
+                        #rn.insert(0, r[0])
+                    elif r[1] == nr[-1]:
+                        if debug: print(str(r[1])+" at tail")
+                        check_inner(nr, r[0], head=False)
+                        self.route.pop(ind)
+                        break
+                        #rn.append(0, r[0])
+            if debug: print('\n')
+            count += 1
+            if count > 100:
+                raise Exception("Unable to complete route before 100 inters")
+
+        self.route = nr
+
+
+    def compress_routes_2(self):
 
         class loose_list(list):
             def __init__(self):

@@ -12,10 +12,10 @@ import regex
 
 ## Regex parsing
 pin_block_reg = r'^PINS\s*\d*\s*;\w*\n(?|.*\n)*END\s*PINS$'
-pin_line_reg  = r'^\s*-\s*(?P<pin>\w*)\s*\+\s*NET\s*(?P<net>\w*)\s*\+\s*DIRECTION\s*(?P<direction>\w*)\s*\+\sUSE\s*SIGNAL\s*\+\s*PORT\s*\+\s*LAYER\s*(?P<layer>\w*)\s*(\(\s*(?P<lx1>[-\d]*)\s*(?P<ly1>[-\d]*)\s*\))\s*(\(\s*(?P<lx2>[-\d]*)\s*(?P<ly2>[-\d]*)\s*\))\s*\+\s*FIXED\s*(\(\s*(?P<fx1>\d*)\s*(?P<fy1>\d*)\s*\)\s*(?P<fdir>\w))\s*;'
+pin_line_reg  = r'^\s*-\s*(?P<pin>\w*)\s*\+\s*NET\s*(?P<net>\w*)\s*\+\s*DIRECTION\s*(?P<dir>\w*)\s*\+\sUSE\s*SIGNAL\s*\+\s*PORT\s*\+\s*LAYER\s*(?P<layer>\w*)\s*(\(\s*(?P<lx1>[-\d]*)\s*(?P<ly1>[-\d]*)\s*\))\s*(\(\s*(?P<lx2>[-\d]*)\s*(?P<ly2>[-\d]*)\s*\))\s*\+\s*FIXED\s*(\(\s*(?P<fx1>\d*)\s*(?P<fy1>\d*)\s*\)\s*(?P<fdir>\w))\s*;'
 
 comp_block_reg = r'^COMPONENTS\s*\d*\s*;\w*\n(?|.*\n)*END\s*COMPONENTS$'
-comp_line_reg = r'^\s*-\s*(?P<name>\w*)\s*(?P<comp>\w*)\s*\+\s*PLACED\s*(\(\s*(?P<x1>\d*)\s*(?P<y1>\d*)\s*\) (\w*))\s*;'
+comp_line_reg = r'^\s*-\s*(?P<name>\w*)\s*(?P<comp>\w*)\s*\+\s*PLACED\s*(\(\s*(?P<x1>\d*)\s*(?P<y1>\d*)\s*\)\s*(?P<dir>\w*))\s*;'
 
 nets_block_reg = r'^NETS\s*\d*\s*;\w*\n(?|.*\n)*END\s*NETS$'
 nets_line_reg = r'-\s*(?P<net>\w*)\s*(\(\s*(?P<dev1>\w*)\s*(?P<p1>\w*)\s*\))\s*(\(\s*(?P<dev2>\w*)\s*(?P<p2>\w*)\s*\))\s*\+\s*USE SIGNAL.*\s*\+\s*ROUTED.*\n(?|\s*NEW.*)*;$'
@@ -77,7 +77,7 @@ def get_pin_line(in_pin):
     return mo
         
 
-def get_component(in_def):
+def get_components(in_def):
     
     mod_re = bytes(comp_block_reg, 'utf-8')
 
@@ -100,8 +100,8 @@ def get_component(in_def):
         )
 
         comp_list.append(nc)
-
-    write_components(comp_list)
+    return comp_list
+    #write_components(comp_list)
 
 
 def get_comp_line(in_comp):
@@ -123,19 +123,26 @@ def get_comp_line(in_comp):
 
     return mo
 
-def write_components(o_file, comp_list, layer_h):
+def write_components(o_file, comp_list, layer_h, px):
 
-    o_file.write("""
-    union() {
+    if  isinstance(o_file, str):
+        o_file = open(o_file, 'w+')
+
+    o_file.write(f"""
+    // Components
     """)
 
     for c in comp_list:
-        o_file.write("""
-        {c.name}(orientation = "{c.direction}", xpos = {c.x1}, ypos = {c.y1}, zpos = {layer_h});
-        """)
+        cx1 = float(c.x1.decode('utf-8'))*px
+        cy1 = float(c.y1.decode('utf-8'))*px
+        cz1 = layer_h*px
 
-    o_file.write("""
-    }
+        o_file.write(f"""// {c.name.decode('utf-8')}
+    {c.comp.decode('utf-8')}(orientation = "{c.dir.decode('utf-8')}", xpos = {cx1}, ypos = {cy1}, zpos = {cz1});
+    """)
+
+    o_file.write(f"""
+    
     """)
 
 net_property = {
@@ -230,7 +237,10 @@ def get_nets(in_def):
             
 
         nets_list.append(nb.export_net())
-            
+
+    for n in nets_list:
+        n.compress_routes()
+
     return nets_list
     
 
@@ -265,32 +275,57 @@ def get_net_route(in_net_line):
 
 def write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1]):
 
-    rot = '[0, [0,0,1]]'
+    rot = [0, [0,0,1]]
+
+    rend = None
+
+    f = open(o_file, "w")
+    nl = '\n'
+
+    #print(net_list[0])
 
     for n in net_list:
         #o_file.write("""
         #// routing {n.net}
         #// connect {dev1}, {p1} to {dev2}, {p2}
         #polychannel(""")
+        print(n)
+
         pc_route = []
+        
+
 
         for r in n.route:
-            size = str(size)
-            pt1 = [r.x1, r.y1, r.z1]
-            pt2 = [r.x2, r.y2, r.z2]
+            size = size
+            pt = r
             
-            pc_pt1 = [shape, size, pt1, rot]
-            pc_pt2 = [shape, size, pt2, rot]
+            pc_pt1 = [shape, size, pt, rot]
+            #pc_pt2 = [shape, size, pt2, rot]
 
-            pc_rotue.append(pc_pt1)
-            pc_rotue.append(pc_pt2)
+            pc_route.append(pc_pt1)
+            #pc_rotue.append(pc_pt2)
             # todo
 
 
-        pc.polychannel_route(
-            n.net, [dev1, p1], [dev2, p2],
-            pc_route
-        )
+        #new_pc = pc.polychannel_route(
+        #    n.net, [n.dev1, n.p1], [n.dev2, n.p2],
+        #    str(pc_route).replace(']],', ']],\n')
+        #)
+        pc_route = str(pc_route).replace(']],', ']],\n')
+
+        f.write(f"""polychannel_route("{n.net}", 
+            ["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"]
+            {pc_route}{nl});
+        """)
+
+
+        if rend == None:
+            rend = pc_route
+        else:
+            rend += pc_route
+    f.close()
+
+    #solid.scad_render_to_file(rend, o_file)
 
 
 
