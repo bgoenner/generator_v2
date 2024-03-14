@@ -1,5 +1,6 @@
 
 import os, sys
+import shutil
 
 import re
 import mmap
@@ -9,6 +10,7 @@ from generator_class import *
 
 import solid
 import regex
+import pandas as pd
 
 ## Regex parsing
 pin_block_reg = r'^PINS\s*\d*\s*;\w*\n(?|.*\n)*END\s*PINS$'
@@ -29,8 +31,23 @@ routing = solid.import_scad(os.getcwd()+'/support_libs/routing.scad')
 
 mfda_scad = None
 
-def get_pins(in_def):
+# hard coded metal layers
+mets = {
+    'met1':0,
+    'met2':1,
+    'met3':2,
+    'met4':3,
+    'met5':4,
+    'met6':5,
+    'met7':6,
+    'met8':7,
+    'met9':8,
+}
+
+def get_pins(in_def, in_pins_cdir, debug=True):
     
+    pins={}
+
     mod_re = bytes(pin_block_reg, 'utf-8')
 
     # parse template
@@ -38,27 +55,43 @@ def get_pins(in_def):
         data = mmap.mmap(f.fileno(), 0)
         mo = regex.findall(mod_re, data, re.MULTILINE)
 
+    if in_pins_cdir.split('.')[1] == 'csv':
+        in_pin_list = pd.read_csv(in_pins_cdir)
+    elif in_pins_cdir.split('.')[1] == 'xlsx':
+        in_pin_list = pd.read_excel(in_pins_cdir)
+
     for m in mo:
 
         obj = get_pin_line(m)
 
         # iterate through pin objects
         for o in obj:
-            print(o.group('pin'))
-            print(o.group('net'))
-            print(o.group('direction'))
-            # layer
-            print(o.group('layer'))
-            print(o.group('lx1'))
-            print(o.group('ly1'))
-            print(o.group('lx2'))
-            print(o.group('ly2'))
-            # Fixed 
-            print(o.group('fx1'))
-            print(o.group('fy1'))
-            print(o.group('fdir'))
+            pin_n = o.group('pin').decode('utf-8')
+            pin_f_i = in_pin_list.loc[in_pin_list['pin'] == pin_n].index
+            pin_cdir = in_pin_list['connect_direction'].iloc[pin_f_i[0]]
+            if debug:
+                print(in_pin_list.loc[in_pin_list['pin'] == pin_n].index[0])
 
-            
+            pins[pin_n] = Pin(
+            name=pin_n,
+            net=o.group('net').decode('utf-8'),
+            direction=o.group('dir').decode('utf-8'),
+            # layer
+            layer=o.group('layer').decode('utf-8'),
+            l_size=[o.group('lx1').decode('utf-8'),
+            o.group('ly1').decode('utf-8'),
+            o.group('lx2').decode('utf-8'),
+            o.group('ly2').decode('utf-8')],
+            # Fixed 
+            fixed=[o.group('fx1').decode('utf-8'),
+            o.group('fy1').decode('utf-8'),
+            o.group('fdir').decode('utf-8')],
+            connect_dir=pin_cdir
+            )
+    if debug:
+        print(pins)
+    return pins
+     
 
 def get_pin_line(in_pin):
     
@@ -75,7 +108,56 @@ def get_pin_line(in_pin):
     mo = regex.finditer(mod_re, data, re.MULTILINE)
 
     return mo
+
+
+def write_pins(o_file, pin_list, bulk, tlef_properties, mets, mode='w+', debug=False):
+    
+    f = open(o_file, mode)
+    f.write("// PINS")
+
+    nl = '\n'
+
+    shape='cube'
+    size = [0.1, 0.1, 0.1]
+    rot  = [0, [0,0,1]]
+
+    flp = tlef_properties
+
+    if isinstance(bulk, list):
+        bulk = {
+            'x':bulk[0],
+            'y':bulk[1],
+            'z':bulk[2]
+        }
+
+    for p in pin_list.values():
+        if debug:
+            print(mets[p.layer])
+
+        if p.connect_dir=='z+':
+            pt1 = [
+                float(p.fx1)/flp['def_scale']*flp['px'], 
+                float(p.fy1)/flp['def_scale']*flp['px'], 
+                bulk['z']*flp['layer']]
+            pt2 = [
+                float(p.fx1)/flp['def_scale']*flp['px'],
+                float(p.fy1)/flp['def_scale']*flp['px'],
+                (mets[p.layer]*flp['lpv']+flp['bot_layers'])*flp['layer']]
+        elif p.connect_dir=='z-':
+            pt1 = [p.x1/flp['def_scale'], p.y1/flp['def_scale'], bulk['z']*flp['layer_h']]
+            pt2 = [p.x1/flp['def_scale'], p.y1/flp['def_scale'], 0]
         
+        pc_route = [[shape, size, pt1, rot]]
+        pc_route.append([shape, size, pt2, rot])
+
+        pc_route = str(pc_route).replace("'", '"').replace(']],', ']],\n')
+        
+        f.write(f"""
+        polychannel_route("{p.name}", 
+        ["PIN"], ["net", "{p.net}"],
+{pc_route}{nl});
+""")
+
 
 def get_components(in_def):
     
@@ -93,10 +175,12 @@ def get_components(in_def):
     for l in mo_l:
 
         nc = Component(
-            name=l.group('name'),
-            comp=l.group('comp'),
-            x1=l.group('x1'),
-            y1=l.group('y1')
+            name=l.group('name').decode('utf-8'),
+            comp=l.group('comp').decode('utf-8'),
+            x1=l.group('x1').decode('utf-8'),
+            y1=l.group('y1').decode('utf-8'),
+            dir=l.group('dir').decode('utf-8'),
+            #def_scale=net_property['def_scale']
         )
 
         comp_list.append(nc)
@@ -123,28 +207,30 @@ def get_comp_line(in_comp):
 
     return mo
 
-def write_components(o_file, comp_list, layer_h, px):
+def write_components(o_file, comp_list, layer_h, px, mode="w+"):
 
     if  isinstance(o_file, str):
-        o_file = open(o_file, 'w+')
+        o_file = open(o_file, mode)
 
     o_file.write(f"""
-    // Components
-    """)
+// Components
+""")
 
     for c in comp_list:
-        cx1 = float(c.x1.decode('utf-8'))*px
-        cy1 = float(c.y1.decode('utf-8'))*px
-        cz1 = layer_h*px
+        cx1 = float(c.x1)/net_property['def_scale']
+        cy1 = float(c.y1)/net_property['def_scale']
+        cz1 = net_property['bot_layers'] - 5 
+        # all components have a 5 layer offset for some reason 
 
-        o_file.write(f"""// {c.name.decode('utf-8')}
-    {c.comp.decode('utf-8')}(orientation = "{c.dir.decode('utf-8')}", xpos = {cx1}, ypos = {cy1}, zpos = {cz1});
-    """)
+        o_file.write(f"""// {c.name}
+{c.comp}(xpos = {cx1}, ypos = {cy1}, zpos = {cz1}, orientation = "{c.dir}");
+""")
 
     o_file.write(f"""
     
     """)
 
+# hard coded properties
 net_property = {
     'px':0.0076,
     'layer':0.010,
@@ -153,21 +239,9 @@ net_property = {
     'bot_layers':20
 }
 
-mets = {
-    'met1':0,
-    'met2':1,
-    'met3':2,
-    'met4':3,
-    'met5':4,
-    'met6':5,
-    'met7':6,
-    'met8':7,
-    'met9':8,
-}
-
 tlef_f = './def_test/test_1.tlef'
 
-def get_nets(in_def):
+def get_nets(in_def, tlef_property=None, debug={}):
     mod_re = bytes(nets_block_reg, 'utf-8')
     #mod_re = regex.compile(nets_block_reg, re.MULTILINE)
 
@@ -180,13 +254,22 @@ def get_nets(in_def):
 
     nets_list = []
 
-    nb = NetBuilder(
-        px        =net_property['px'],
-        layer     =net_property['layer'],
-        lpv       =net_property['lpv'],
-        def_scale =net_property['def_scale'],
-        bottom_layers=net_property['bot_layers']
-    )
+    if tlef_property == None:
+        nb = NetBuilder(
+            px        =net_property['px'],
+            layer     =net_property['layer'],
+            lpv       =net_property['lpv'],
+            def_scale =net_property['def_scale'],
+            bottom_layers=net_property['bot_layers']
+        )
+    else:
+        nb = NetBuilder(
+            px        =tlef_property['px'],
+            layer     =tlef_property['layer'],
+            lpv       =tlef_property['lpv'],
+            def_scale =tlef_property['def_scale'],
+            bottom_layers=tlef_property['bot_layers']
+        )
     nb.import_tlef(tlef_f)
     nb.import_met(mets)
 
@@ -239,7 +322,10 @@ def get_nets(in_def):
         nets_list.append(nb.export_net())
 
     for n in nets_list:
-        n.compress_routes()
+        if 'compress_routes' in debug and debug['compress_routes']==True:
+            n.compress_routes(debug=True)
+        else:
+            n.compress_routes()
 
     return nets_list
     
@@ -273,13 +359,13 @@ def get_net_route(in_net_line):
     mo = regex.finditer(mod_re, data, 0)
     return mo
 
-def write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1]):
+def write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1], mode="w+"):
 
     rot = [0, [0,0,1]]
 
     rend = None
 
-    f = open(o_file, "w")
+    f = open(o_file, mode)
     nl = '\n'
 
     #print(net_list[0])
@@ -311,10 +397,10 @@ def write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1]):
         #    n.net, [n.dev1, n.p1], [n.dev2, n.p2],
         #    str(pc_route).replace(']],', ']],\n')
         #)
-        pc_route = str(pc_route).replace(']],', ']],\n')
+        pc_route = str(pc_route).replace(']],', ']],\n').replace("'", '"')
 
         f.write(f"""polychannel_route("{n.net}", 
-            ["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"]
+        ["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"],
             {pc_route}{nl});
         """)
 
@@ -327,9 +413,37 @@ def write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1]):
 
     #solid.scad_render_to_file(rend, o_file)
 
+def write_imports(o_file, platform, routing_use, scad_lib_dir='.', copy=False, results_dir=None, mode='w'):
 
+    of = open(o_file, mode)
 
-
+    #of.write(f"use <{scad_lib_dir}/{platform}_merged.scad>\n")
+    if copy:
+        if results_dir == None:
+            raise ValueError("No results directory")
+        shutil.copy(f"{scad_lib_dir}/{platform}_merged.scad", 
+            f"{results_dir}/{platform}_merged.scad")
+        of.write(f"use <./{platform}_merged.scad>\n")
+    else:
+        of.write(f"use <{scad_lib_dir}/{platform}_merged.scad>\n")
+    
+    if isinstance(routing_use, list):
+        for r_use in routing_use:
+            
+            if copy and results_dir != None:
+                shutil.copy(f"{scad_lib_dir}/{r_use}.scad", 
+                    f"{results_dir}/{r_use}.scad")
+                of.write(f"use <./{r_use}.scad>\n")
+            else:
+                of.write(f"use <{scad_lib_dir}/{r_use}.scad>\n")
+    elif isinstance(routing_use, str):
+        #of.write(f"use <{scad_lib_dir}/{routing_use}.scad\n>")
+        if copy and results_dir != None:
+            shutil.copy(f"{scad_lib_dir}/{routing_use}.scad", 
+                f"{results_dir}/{routing_use}.scad")
+            of.write(f"use <./{routing_use}.scad>\n")
+        else:
+            of.write(f"use <{scad_lib_dir}/{routing_use}.scad>\n")
 
 
 tlef_bl_re = r'(?P<key>(?:LAYER|SITE|VIA|PROPERTYDEFINITIONS|UNITS))\s*(?|.*\s*)*?END\s*\w*'
@@ -384,10 +498,110 @@ def get_tlef_site(tlef):
         data = mmap.mmap(f.fileno(), 0)
 
     mo = regex.finditer(mod_re, data, 0)
-    
-def main(platform, design, def_file, results_dir, px, layer, bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, def_scale, pitch, res, dimm_file, comp_file):
-    pass
 
+def write_bulk(o_file, bulk_dim, transparent=False, mode='a'):
+
+    fb = '{'
+    bb = '}'
+
+    if transparent:
+        tp = '%'
+    else:
+        tp = ''
+
+    with open(o_file, mode) as of:
+        of.write(f"""
+difference() {fb}
+    {tp}cube([{bulk_dim[0]}*px,{bulk_dim[1]}*px,{bulk_dim[2]}*layer]);
+    union() {fb}
+""")
+
+# hard coded support files
+
+routing_use = ['polychannel_v2', 'routing']
+
+def main(platform, design, def_file, results_dir, px, layer, bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, def_scale, pitch, res, dimm_file, comp_file, pin_con_dir_f, transparent=False):
+    
+    print("""
+    --------------------------------
+          OpenSCAD generation
+    --------------------------------
+    """)
+
+    o_file = f"{results_dir}/{design}.scad"
+
+    net_properties = {
+        'px':px,
+        'layer':layer,
+        'lpv':lpv,
+        'def_scale':def_scale,
+        'bot_layers':bttm_layer
+    }
+
+
+    fb = '{'
+    bb = '}'
+
+    bulk = [xbulk, ybulk, zbulk] 
+
+    # generation
+    # overwrites previous file
+    os.makedirs(results_dir, exist_ok=True)
+    write_imports(o_file, platform, routing_use, './support_libs', mode='w+', copy=True, results_dir=results_dir)
+
+    with open(o_file, 'a') as of:
+        of.write(f"""
+px = {px};
+layer = {layer};
+
+""")
+
+    # initial bulk generation
+    write_bulk(o_file, bulk, transparent, mode='a')
+
+    # write nets
+    write_nets(o_file,
+        get_nets(def_file, net_properties),
+        shape='cube',
+        size=[0.1,0.1,0.1],
+        mode='a')
+
+    # write components
+    write_components(o_file,
+        get_components(def_file),
+        net_property['layer'],
+        net_property['px'],
+        mode='a')
+
+    # write pin vias
+    write_pins(o_file,
+        get_pins(def_file, pin_con_dir_f),
+        bulk,
+        net_properties,
+        mets,
+        mode='a')
+
+    with open(o_file, 'a') as of:
+        of.write(f"""
+        {bb} // end union
+        {bb} // end difference
+        """)
+
+    # write interconnect
+    if transparent:
+        tp = '%'
+    else:
+        tp = ''
+    with open(o_file, 'a') as of:
+        of.write(f"""
+{tp}interconnect_32channel({xbulk/2}, {ybulk/2}, {zbulk});
+""")
+
+    print("""
+    --------------------------------
+          OpenSCAD complete
+    --------------------------------
+    """)
 
 if __name__ == "__main__":
 
@@ -411,6 +625,7 @@ if __name__ == "__main__":
     parser.add_argument('--res', type=int)
     parser.add_argument('--dimm_file', type=str)
     parser.add_argument('--comp_file', type=str)
+    parser.add_argument('--pin_file', type=str)
 
     args = parser.parse_args()
 
@@ -432,5 +647,6 @@ if __name__ == "__main__":
         args.pitch,
         args.res,
         args.dimm_file,
-        args.comp_file
+        args.comp_file,
+        args.pin_file,
     )

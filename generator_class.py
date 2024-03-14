@@ -85,7 +85,11 @@ class Nets:
         count = 0
         r_len = len(self.route)
 
-        while len(nr) < r_len:
+        if debug:
+            print("initial routes:")
+            print(self.route)
+
+        while len(nr) < r_len+1:
             if debug: print("sr:"+str(len(self.route))+":"+str(self.route))
             if len(nr)>=1 and debug:
                 print("nr:"+str(len(nr))+":"+str(nr))
@@ -127,8 +131,11 @@ class Nets:
 
         self.route = nr
 
+        if debug:
+            print("Final routes:")
+            print(self.route)
 
-    def compress_routes_2(self):
+    def compress_routes_2(self, debug=False):
 
         class loose_list(list):
             def __init__(self):
@@ -185,6 +192,10 @@ class Nets:
                     break
             return False
 
+        if debug:
+            print("initial routes:")
+            print(self.route)
+
         comp_r = []
         loose_r= []
         for r in self.route:
@@ -203,6 +214,10 @@ class Nets:
                     # create new list
                     loose_r.append(r)
                     # if sub_r not in r create new sub list
+
+        if debug:
+            print("Final routes:")
+            print(self.route)
                     
 
     def print_routes(self):
@@ -314,8 +329,8 @@ class NetBuilder:
 
 
         if via is not None:
-            x1 = float(x1)/self.def_scale
-            y1 = float(y1)/self.def_scale
+            x1 = float(x1)/self.def_scale*self.px
+            y1 = float(y1)/self.def_scale*self.px
             x2 = x1
             y2 = y1
             v = self.get_vias_met(via)
@@ -334,11 +349,11 @@ class NetBuilder:
                 x2 = x1
             if y2 == '*':
                 y2 = y1
-            x1 = float(x1)/self.def_scale
-            y1 = float(y1)/self.def_scale
+            x1 = float(x1)/self.def_scale*self.px
+            y1 = float(y1)/self.def_scale*self.px
 
-            x2 = float(x2)/self.def_scale
-            y2 = float(y2)/self.def_scale
+            x2 = float(x2)/self.def_scale*self.px
+            y2 = float(y2)/self.def_scale*self.px
             
             if debug:
                 print("Add route x2: "+str([[x1, y1, z1],[x2, y2, z2]]))
@@ -355,12 +370,14 @@ class Component:
         name=None,
         comp=None,
         x1=None,
-        y1=None):
+        y1=None,
+        dir=None):
         
         self.name = name
         self.comp = comp
-        self.x1   = x1
-        self.y1   = y1
+        self.x1   = x1#/def_scale
+        self.y1   = y1#/def_scale
+        self.dir  = dir
 
 class Pin:
     
@@ -370,7 +387,8 @@ class Pin:
         direction=None,
         layer=None,
         l_size=[0,0,0,0],
-        fixed=[0,0,'']):
+        fixed=[0,0,''],
+        connect_dir=None):
         
         self.name = name
         self.net  = net
@@ -383,3 +401,24 @@ class Pin:
         self.fx1 = fixed[0]
         self.fy1 = fixed[1]
         self.fdir = fixed[2]
+        self.set_connect_dir(connect_dir)
+
+    def set_connect_dir(self, cdir):
+        if cdir.upper() == "TOP" or \
+            connect_dir == 'z+':
+            self.connect_dir = "z+"
+        elif cdir.upper() == "BOTTOM" or \
+            connect_dir == 'z-':
+            self.connect_dir = "z-"
+        elif cdir.upper() == "LEFT" or \
+            connect_dir == 'x+':
+            self.connect_dir = "x+"
+        elif cdir.upper() == "RIGHT" or \
+            connect_dir == 'x-':
+            self.connect_dir = "x-"
+        elif cdir.upper() == "FRONT" or \
+            connect_dir == 'y+':
+            self.connect_dir = "y+"
+        elif cdir.upper() == "BACK" or \
+            connect_dir == 'y-':
+            self.connect_dir = "y-"

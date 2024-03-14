@@ -45,6 +45,8 @@ RES_VAL                 = 120
 # optional - path to route dimensions specifications
 DIMM_FILE               = $(SCAD_FLOW_DESIGN_DIR)/$(PLATFORM)/$(DESIGN)/dimm.csv
 
+PINS_FILE               = $(SCAD_FLOW_DESIGN_DIR)/$(PLATFORM)/$(DESIGN)/pins.csv
+
 # SCAD script arguments
 SCAD_ARGS =\
                         --platform "$(PLATFORM)" --design "$(DESIGN)" --def_file "$(DEF_FILE)" --results_dir "$(DESIGN_RESULTS)"        \
