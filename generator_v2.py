@@ -8,7 +8,7 @@ import argparse
 
 from generator_class import * 
 
-import solid
+#import solid
 import regex
 import pandas as pd
 
@@ -25,9 +25,9 @@ nets_route_reg= r'(?:ROUTED|NEW)\s*(?P<layer>\w*)\s*((?:\(\s*(?P<x1>[\d\*]*)\s*(
 
 # solid imports
 
-pdk = solid.import_scad(os.getcwd()+'/support_libs/h.r.3.3_pdk_merged.scad')
-pc = solid.import_scad(os.getcwd()+'/support_libs/polychannel_v2.scad')
-routing = solid.import_scad(os.getcwd()+'/support_libs/routing.scad')
+#pdk = solid.import_scad(os.getcwd()+'/support_libs/h.r.3.3_pdk_merged.scad')
+#pc = solid.import_scad(os.getcwd()+'/support_libs/polychannel_v2.scad')
+#routing = solid.import_scad(os.getcwd()+'/support_libs/routing.scad')
 
 mfda_scad = None
 
@@ -55,9 +55,9 @@ def get_pins(in_def, in_pins_cdir, debug=True):
         data = mmap.mmap(f.fileno(), 0)
         mo = regex.findall(mod_re, data, re.MULTILINE)
 
-    if in_pins_cdir.split('.')[1] == 'csv':
+    if in_pins_cdir.split('.')[-1] == 'csv':
         in_pin_list = pd.read_csv(in_pins_cdir)
-    elif in_pins_cdir.split('.')[1] == 'xlsx':
+    elif in_pins_cdir.split('.')[-1] == 'xlsx':
         in_pin_list = pd.read_excel(in_pins_cdir)
 
     for m in mo:
@@ -113,7 +113,7 @@ def get_pin_line(in_pin):
 def write_pins(o_file, pin_list, bulk, tlef_properties, mets, mode='w+', debug=False):
     
     f = open(o_file, mode)
-    f.write("// PINS")
+    f.write("\n// PINS")
 
     nl = '\n'
 
@@ -153,8 +153,8 @@ def write_pins(o_file, pin_list, bulk, tlef_properties, mets, mode='w+', debug=F
         pc_route = str(pc_route).replace("'", '"').replace(']],', ']],\n')
         
         f.write(f"""
-        polychannel_route("{p.name}", 
-        ["PIN"], ["net", "{p.net}"],
+    polychannel_route("{p.name}", 
+    ["PIN"], ["net", "{p.net}"],
 {pc_route}{nl});
 """)
 
@@ -241,7 +241,7 @@ net_property = {
 
 tlef_f = './def_test/test_1.tlef'
 
-def get_nets(in_def, tlef_property=None, debug={}):
+def get_nets(in_def, tlef=None, tlef_property=None, debug={}, testing=False):
     mod_re = bytes(nets_block_reg, 'utf-8')
     #mod_re = regex.compile(nets_block_reg, re.MULTILINE)
 
@@ -253,6 +253,10 @@ def get_nets(in_def, tlef_property=None, debug={}):
     mo_l = get_net_lines(mo)
 
     nets_list = []
+
+    if testing:
+        print("Testing! Using test tlef file")
+        tlef = tlef_f
 
     if tlef_property == None:
         nb = NetBuilder(
@@ -270,7 +274,7 @@ def get_nets(in_def, tlef_property=None, debug={}):
             def_scale =tlef_property['def_scale'],
             bottom_layers=tlef_property['bot_layers']
         )
-    nb.import_tlef(tlef_f)
+    nb.import_tlef(tlef)
     nb.import_met(mets)
 
     for l in mo_l:
@@ -401,7 +405,7 @@ def write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1], mode="w+"):
 
         f.write(f"""polychannel_route("{n.net}", 
         ["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"],
-            {pc_route}{nl});
+{pc_route}{nl});
         """)
 
 
@@ -413,25 +417,33 @@ def write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1], mode="w+"):
 
     #solid.scad_render_to_file(rend, o_file)
 
-def write_imports(o_file, platform, routing_use, scad_lib_dir='.', copy=False, results_dir=None, mode='w'):
+def write_imports(o_file, comp_file, routing_use, scad_lib_dir='.', copy=False, results_dir=None, mode='w'):
 
     of = open(o_file, mode)
 
+    sc_base = '/'.join(os.path.realpath(__file__).split('/')[:-1]+\
+        ['support_libs'])
+
+    if '/' in comp_file:
+        comp_dir = '.'
+    else:
+        comp_dir = scad_lib_dir
     #of.write(f"use <{scad_lib_dir}/{platform}_merged.scad>\n")
     if copy:
         if results_dir == None:
             raise ValueError("No results directory")
-        shutil.copy(f"{scad_lib_dir}/{platform}_merged.scad", 
-            f"{results_dir}/{platform}_merged.scad")
-        of.write(f"use <./{platform}_merged.scad>\n")
+        shutil.copy(f"{comp_dir}/{comp_file}", 
+            f"{results_dir}/{comp_file.split('/')[-1]}")
+        of.write(f"use <./{comp_file.split('/')[-1]}>\n")
     else:
-        of.write(f"use <{scad_lib_dir}/{platform}_merged.scad>\n")
+        of.write(f"use <{comp_dir}/{comp_file}>\n")
     
     if isinstance(routing_use, list):
         for r_use in routing_use:
             
             if copy and results_dir != None:
-                shutil.copy(f"{scad_lib_dir}/{r_use}.scad", 
+                #shutil.copy(f"{scad_lib_dir}/{r_use}.scad", 
+                shutil.copy(f"{sc_base}/{r_use}.scad", 
                     f"{results_dir}/{r_use}.scad")
                 of.write(f"use <./{r_use}.scad>\n")
             else:
@@ -520,7 +532,7 @@ difference() {fb}
 
 routing_use = ['polychannel_v2', 'routing']
 
-def main(platform, design, def_file, results_dir, px, layer, bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, def_scale, pitch, res, dimm_file, comp_file, pin_con_dir_f, transparent=False):
+def main(platform, design, def_file, results_dir, px, layer, bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, def_scale, pitch, res, dimm_file, tlef, comp_file, pin_con_dir_f, transparent=False):
     
     print("""
     --------------------------------
@@ -546,8 +558,10 @@ def main(platform, design, def_file, results_dir, px, layer, bttm_layer, lpv, xb
 
     # generation
     # overwrites previous file
+    print(f"Starting writing @ {results_dir}")
     os.makedirs(results_dir, exist_ok=True)
-    write_imports(o_file, platform, routing_use, './support_libs', mode='w+', copy=True, results_dir=results_dir)
+
+    write_imports(o_file, comp_file, routing_use, './support_libs', mode='w+', copy=True, results_dir=results_dir)
 
     with open(o_file, 'a') as of:
         of.write(f"""
@@ -561,7 +575,7 @@ layer = {layer};
 
     # write nets
     write_nets(o_file,
-        get_nets(def_file, net_properties),
+        get_nets(def_file, tlef, net_properties),
         shape='cube',
         size=[0.1,0.1,0.1],
         mode='a')
@@ -583,9 +597,9 @@ layer = {layer};
 
     with open(o_file, 'a') as of:
         of.write(f"""
-        {bb} // end union
-        {bb} // end difference
-        """)
+{bb} // end union
+{bb} // end difference
+""")
 
     # write interconnect
     if transparent:
@@ -624,6 +638,7 @@ if __name__ == "__main__":
     parser.add_argument('--pitch', type=int)
     parser.add_argument('--res', type=int)
     parser.add_argument('--dimm_file', type=str)
+    parser.add_argument('--tlef', type=str)
     parser.add_argument('--comp_file', type=str)
     parser.add_argument('--pin_file', type=str)
 
@@ -647,6 +662,7 @@ if __name__ == "__main__":
         args.pitch,
         args.res,
         args.dimm_file,
+        args.tlef,
         args.comp_file,
         args.pin_file,
     )
