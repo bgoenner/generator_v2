@@ -57,8 +57,12 @@ def get_pins(in_def, in_pins_cdir, debug=True):
 
     if in_pins_cdir.split('.')[-1] == 'csv':
         in_pin_list = pd.read_csv(in_pins_cdir)
+        _only_top = False
     elif in_pins_cdir.split('.')[-1] == 'xlsx':
         in_pin_list = pd.read_excel(in_pins_cdir)
+        _only_top = False
+    elif in_pins_cdir == None:
+        _only_top = True
 
     for m in mo:
 
@@ -67,8 +71,12 @@ def get_pins(in_def, in_pins_cdir, debug=True):
         # iterate through pin objects
         for o in obj:
             pin_n = o.group('pin').decode('utf-8')
-            pin_f_i = in_pin_list.loc[in_pin_list['pin'] == pin_n].index
-            pin_cdir = in_pin_list['connect_direction'].iloc[pin_f_i[0]]
+            if not _only_top:
+                pin_f_i = in_pin_list.loc[in_pin_list['pin'] == pin_n].index
+                pin_cdir = in_pin_list['connect_direction'].iloc[pin_f_i[0]]
+            elif _only_top:
+                pin_cdir = 'TOP'
+                
             if debug:
                 print(in_pin_list.loc[in_pin_list['pin'] == pin_n].index[0])
 
@@ -532,7 +540,7 @@ difference() {fb}
 
 routing_use = ['polychannel_v2', 'routing']
 
-def main(platform, design, def_file, results_dir, px, layer, bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, def_scale, pitch, res, dimm_file, tlef, comp_file, pin_con_dir_f, transparent=False):
+def main(platform, design, def_file, results_dir, px, layer, bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, def_scale, pitch, res, dimm_file, tlef, comp_file, pin_con_dir_f=None, transparent=False):
     
     print("""
     --------------------------------
