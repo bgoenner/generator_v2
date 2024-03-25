@@ -76,7 +76,7 @@ def get_pins(in_def, in_pins_cdir, debug=True):
                 pin_cdir = in_pin_list['connect_direction'].iloc[pin_f_i[0]]
             elif _only_top:
                 pin_cdir = 'TOP'
-                
+
             if debug:
                 print(in_pin_list.loc[in_pin_list['pin'] == pin_n].index[0])
 
@@ -647,10 +647,13 @@ if __name__ == "__main__":
     parser.add_argument('--res', type=int)
     parser.add_argument('--dimm_file', type=str)
     parser.add_argument('--tlef', type=str)
-    parser.add_argument('--comp_file', type=str)
-    parser.add_argument('--pin_file', type=str)
+    parser.add_argument('--comp_file', type=str, default=None)
+    parser.add_argument('--pin_file', type=str, default=None)
 
     args = parser.parse_args()
+
+    if args.comp_file == None:
+        args.comp_file = f"designs/{platform}/{design}/{design}.v"
 
     main(
         args.platform,
