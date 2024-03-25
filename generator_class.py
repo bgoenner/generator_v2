@@ -19,6 +19,7 @@ class Nets:
         self.p2   = p2
         self.route = []
         self.compress = False
+        self.route_len = 0
 
         # tlef definitions
 
@@ -42,6 +43,29 @@ class Nets:
 
         #print('Adding route: '+str(nr))
         self.route.append(nr)
+
+    def calc_len(self):
+        if not self.compress:
+            raise Exception("Routes need compression")
+        r_len = 0
+        for i, r in enumerate(self.route):
+            if i == 0:
+                print(len(self.route))
+                print(self.route)
+                continue
+            else:
+                r_lenx = abs(self.route[i-1][0] - self.route[i][0])**2
+                r_leny = abs(self.route[i-1][1] - self.route[i][1])**2
+                r_lenz = abs(self.route[i-1][2] - self.route[i][2])**2
+                r_len += (r_lenx+r_leny+r_lenz)**(1/2) 
+
+        self.route_len = r_len
+            
+    def report_len(self):
+        if self.route_len == 0:
+            self.calc_len()
+        return self.route_len
+            
 
     def compress_routes(self, debug=False):
 

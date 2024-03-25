@@ -249,7 +249,7 @@ net_property = {
 
 tlef_f = './def_test/test_1.tlef'
 
-def get_nets(in_def, tlef=None, tlef_property=None, debug={}, testing=False):
+def get_nets(in_def, tlef=None, tlef_property=None, report_len_file=False, debug={}, testing=False):
     mod_re = bytes(nets_block_reg, 'utf-8')
     #mod_re = regex.compile(nets_block_reg, re.MULTILINE)
 
@@ -339,6 +339,14 @@ def get_nets(in_def, tlef=None, tlef_property=None, debug={}, testing=False):
         else:
             n.compress_routes()
 
+    if report_len_file is not None:
+        route_len_dict = {}
+        for n in nets_list:
+            route_len_dict[n.net] = n.report_len()
+        route_len_l = zip(*[route_len_dict.keys(),route_len_dict.values()])
+        pd.DataFrame(route_len_l, 
+            columns=['wire', 'length (mm)']).to_csv(report_len_file)
+
     return nets_list
     
 
@@ -391,8 +399,6 @@ def write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1], mode="w+"):
 
         pc_route = []
         
-
-
         for r in n.route:
             size = size
             pt = r
@@ -564,6 +570,8 @@ def main(platform, design, def_file, results_dir, px, layer, bttm_layer, lpv, xb
 
     bulk = [xbulk, ybulk, zbulk] 
 
+    len_file = f'{design}_length.csv'
+
     # generation
     # overwrites previous file
     print(f"Starting writing @ {results_dir}")
@@ -583,7 +591,7 @@ layer = {layer};
 
     # write nets
     write_nets(o_file,
-        get_nets(def_file, tlef, net_properties),
+        get_nets(def_file, tlef, net_properties, report_len_file=results_dir+'/'+len_file),
         shape='cube',
         size=[0.1,0.1,0.1],
         mode='a')
