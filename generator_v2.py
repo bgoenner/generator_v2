@@ -20,7 +20,10 @@ comp_block_reg = r'^COMPONENTS\s*\d*\s*;\w*\n(?|.*\n)*END\s*COMPONENTS$'
 comp_line_reg = r'^\s*-\s*(?P<name>\w*)\s*(?P<comp>\w*)\s*\+\s*PLACED\s*(\(\s*(?P<x1>\d*)\s*(?P<y1>\d*)\s*\)\s*(?P<dir>\w*))\s*;'
 
 nets_block_reg = r'^NETS\s*\d*\s*;\w*\n(?|.*\n)*END\s*NETS$'
-nets_line_reg = r'-\s*(?P<net>\w*)\s*(\(\s*(?P<dev1>\w*)\s*(?P<p1>\w*)\s*\))\s*(\(\s*(?P<dev2>\w*)\s*(?P<p2>\w*)\s*\))\s*\+\s*USE SIGNAL.*\s*\+\s*ROUTED.*\n(?|\s*NEW.*)*;$'
+#nets_line_reg = r'-\s*(?P<net>\w*)\s*(\(\s*(?P<dev1>\w*)\s*(?P<p1>\w*)\s*\))\s*(\(\s*(?P<dev2>\w*)\s*(?P<p2>\w*)\s*\))\s*\+\s*USE SIGNAL.*\s*\+\s*ROUTED.*\n(?|\s*NEW.*)*;$'
+#nets_line_reg = r'^[ ]*-\s*(?P<net>\w*)\s*(?P<dev_groups>(\(\s*\w*\s*\w*\s*\))\s*(\(\s*\w*\s*\w*\s*\)\s*?)+)\s*\+\s*USE SIGNAL.*\s*\+\s*ROUTED.*\n(?|\s*NEW.*)*;$'
+#nets_line_reg = r'^[ ]*-\s*(?P<net>\w*)\s*(?P<dev_groups>(\(\s*\w*\s*\w*\s*\)\s*?)+)\s*\+\s*USE SIGNAL.*\s*\+\s*ROUTED.*\n(?|\s*NEW.*)*;$'
+nets_line_reg = r'^[ ]*-\s*(?P<net>\w*)\s*(?P<dev_groups>[\(\s\w\)]*?)\s*\+\s*USE SIGNAL.*\s*\+\s*ROUTED.*\n(?|\s*NEW.*)*;$'
 nets_route_reg= r'(?:ROUTED|NEW)\s*(?P<layer>\w*)\s*((?:\(\s*(?P<x1>[\d\*]*)\s*(?P<y1>[\d\*]*)\s*(?P<z1>[\d\*]*)\s*\)))\s((?:\(\s*(?P<x2>[\d\*]*)\s*(?P<y2>[\d\*]*)\s*(?P<z2>[\d\*]*)\s*\)|(?P<via>\w*)))'
 
 # solid imports
@@ -247,10 +250,10 @@ net_property = {
     'bot_layers':20
 }
 
-tlef_f = './def_test/test_1.tlef'
 
-def get_nets(in_def, tlef=None, tlef_property=None, report_len_file=False, debug={}, testing=False):
+def get_nets(in_def, tlef=None, tlef_property=None, report_len_file=None, debug={}, testing=False):
     mod_re = bytes(nets_block_reg, 'utf-8')
+    tlef_f = './def_test/test_1.tlef'
     #mod_re = regex.compile(nets_block_reg, re.MULTILINE)
 
     # parse template
@@ -288,11 +291,18 @@ def get_nets(in_def, tlef=None, tlef_property=None, report_len_file=False, debug
     for l in mo_l:
         mo_r = get_net_route(l.group(0))
 
+        net_dev_reg = r'\(\s*(?P<dev>\w+)\s+(?P<port>\w+)\s*\)'
+
+        print(l.group('net'))
+        print(l.group('dev_groups'))
+        devs = regex.finditer(bytes(net_dev_reg, 'utf-8'), l.group('dev_groups'))
+
+        dev_list = []
+        for d in devs:
+            dev_list.append({'dev':d.group('dev').decode('utf-8'), 'port':d.group('port').decode('utf-8')})
+
         n = Nets(net=l.group('net').decode('utf-8'),
-            dev1=l.group('dev1').decode('utf-8'),
-            p1=l.group('p1').decode('utf-8'),
-            dev2=l.group('dev2').decode('utf-8'),
-            p2=l.group('p2').decode('utf-8'),
+            devs=dev_list
             )
 
         nb.set_net(n)
@@ -417,8 +427,34 @@ def write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1], mode="w+"):
         #)
         pc_route = str(pc_route).replace(']],', ']],\n').replace("'", '"')
 
+        #["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"],
+        dev_str = ''.join([f"""["{x['dev']}", "{x['port']}"], """for x in n.devs])
+
         f.write(f"""polychannel_route("{n.net}", 
-        ["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"],
+        [{dev_str}],
+        [],
+{pc_route}{nl});
+        """)
+
+        if n.dangle_routes:
+            for dr in n.dangling_routes:
+                pc_route = []
+                for r in dr['route']:
+                    size = size
+                    pt = r
+                    
+                    pc_pt1 = [shape, size, pt, rot]
+                    #pc_pt2 = [shape, size, pt2, rot]
+                    pc_route.append(pc_pt1)
+                
+                pc_route = str(pc_route).replace(']],', ']],\n').replace("'", '"')
+
+                #["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"],
+                dev_str = ''.join([f"""["{x['dev']}", "{x['port']}"], """for x in n.devs])
+
+                f.write(f"""polychannel_route("{n.net}", 
+        [{dev_str}],
+        [],
 {pc_route}{nl});
         """)
 

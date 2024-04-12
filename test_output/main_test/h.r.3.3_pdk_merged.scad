@@ -2,6 +2,8 @@ use <routing.scad>
 
 px = 7.6e-3;
 layer = 10e-3;
+lpv = 20;
+
 module valve_20px_1(xpos, ypos, zpos, orientation)
 {
     

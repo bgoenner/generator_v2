@@ -48,7 +48,7 @@ def test_paser_nets():
     'compress_routes' : False,
     }
 
-    nets = get_nets(i_file, net_property, debug=db)
+    nets = get_nets(i_file, tlef_property=net_property, debug=db, testing=True)
 
     print(nets)
     print([x.print_net() for x in nets])
@@ -64,11 +64,25 @@ def test_write_nets():
 
     o_file = os.getcwd()+'/test_output/test_1_2in_routes.scad'
 
-    nets = get_nets(i_file)
+    nets = get_nets(i_file, testing=True)
 
     #write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1])
     write_nets(o_file, nets)
 
+def test_write_nets_2():
+
+    import os
+
+    from generator_v2 import write_nets, get_nets
+
+    i_file = os.getcwd()+'/def_test/test_2_3in.def'
+
+    o_file = os.getcwd()+'/test_output/test_2_3in_routes.scad'
+
+    nets = get_nets(i_file, testing=True)
+
+    #write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1])
+    write_nets(o_file, nets)
 
 def test_write_comps():
 
@@ -144,7 +158,7 @@ union(){fb}
     of.write(bulk_statement)
     of.close()
 
-    nets = get_nets(i_file)
+    nets = get_nets(i_file, testing=True)
     write_nets(o_file, nets, mode='a')
 
     comps = get_components(i_file)
@@ -186,6 +200,34 @@ def test_main():
     pitch=30, 
     res=120, 
     dimm_file=None, 
-    comp_file=None, 
+    comp_file="support_libs/h.r.3.3_pdk_merged.scad",
+    tlef="def_test/test_1.tlef",
     pin_con_dir_f='support_libs/pins.csv')
+    
+def test_2_main():
+
+    import os
+    from generator_v2 import main
+
+    main(
+    platform='h.r.3.3_pdk', 
+    design='test_2_3in', 
+    def_file='def_test/test_2_3in.def', 
+    results_dir='test_output/main_test', 
+    px=0.0076, 
+    layer=0.01, 
+    bttm_layer=20, 
+    lpv=20, 
+    xbulk=2550, 
+    ybulk=1590, 
+    zbulk=280, 
+    xchip=[0, 2550], 
+    ychip=[0, 1590], 
+    def_scale=1000, 
+    pitch=30, 
+    res=120, 
+    dimm_file=None,
+    tlef="def_test/test_1.tlef",
+    comp_file="support_libs/h.r.3.3_pdk_merged.scad", 
+    pin_con_dir_f='support_libs/pins_2.csv')
     
