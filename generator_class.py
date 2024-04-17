@@ -135,7 +135,15 @@ class Nets:
                 self.route.pop(ind)
                 return True
                 #rn.append(0, r[0])
+            else:
+                return False
 
+        def check_d_routes(r, d_routes):
+            for dr in d_routes:
+                if check_route_ends(r, dr['route']):
+                    return True
+            return False
+            
         nr = []
         d_routes = []
         self.dangle_routes = False
@@ -153,19 +161,23 @@ class Nets:
             if debug: print("sr:"+str(len(self.route))+":"+str(self.route))
             if len(nr)>=1 and debug:
                 print("nr:"+str(len(nr))+":"+str(nr))
+            r_init_len = len(self.route)
             for ind, r in enumerate(self.route):
                 if len(nr) < 1:
                     self.route.pop(ind)
                     nr.append(r[0])
                     nr.append(r[1])
+                    break
                 else:
                     if debug: print("r:"+str(r))
                     if check_route_ends(r, nr):
                         break
                     if len(d_routes) > 0:
-                        for dr in d_routes:
-                            if check_route_ends(r, dr['route']):
-                                break
+                        if check_d_routes(r, d_routes):
+                            break
+                        #for dr in d_routes:
+                        #    if check_route_ends(r, dr['route']):
+                        #        break
                     # no matches
                     # check if node is internal
                     if len(nr) > 4 and r[0] in nr[2:-3]:
@@ -173,12 +185,21 @@ class Nets:
                         self.route.pop(ind)
                         self.dangle_routes = True
                         print("has dangling route")
+                        break
                     if len(nr) > 4 and r[1] in nr[2:-3]:
                         d_routes.append({'head':r[1], 'route':r})
                         self.route.pop(ind)
                         self.dangle_routes = True
                         print("has dangling route")
-                    
+                        break
+                # TODO start new route after running through entire list
+                if ind +1 == r_init_len:
+                    # loops again otherwise ind is too large
+                    if len(self.route) == r_init_len:
+                        d_routes.append({'head':None, 'route':r})
+                        self.route.pop(ind)
+                        self.dangle_routes = True
+                        print("has dangling route (Unconnected)")
 
                     #if r[0] == nr[0]:
                     #    if debug: print(str(r[0])+" at head")

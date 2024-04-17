@@ -7,7 +7,7 @@ layer = 0.01;
 
 
 difference() {
-    %cube([2550*px,1590*px,280*layer]);
+    cube([2550*px,1590*px,280*layer]);
     union() {
 polychannel_route("connect0", 
         [["serp1", "in_fluid"], ["serp0", "out_fluid"], ],

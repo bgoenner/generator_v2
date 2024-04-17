@@ -230,4 +230,31 @@ def test_2_main():
     tlef="def_test/test_1.tlef",
     comp_file="support_libs/h.r.3.3_pdk_merged.scad", 
     pin_con_dir_f='support_libs/pins_2.csv')
+
+def test_3_main():
+
+    import os
+    from generator_v2 import main
+
+    main(
+    platform='h.r.3.3_pdk', 
+    design='test_3', 
+    def_file='def_test/test_3.def', 
+    results_dir='test_output/main_test', 
+    px=0.0076, 
+    layer=0.01, 
+    bttm_layer=20, 
+    lpv=20, 
+    xbulk=2550, 
+    ybulk=1590, 
+    zbulk=280, 
+    xchip=[0, 2550], 
+    ychip=[0, 1590], 
+    def_scale=1000, 
+    pitch=30, 
+    res=120, 
+    dimm_file=None,
+    tlef="def_test/test_1.tlef",
+    comp_file="support_libs/h.r.3.3_pdk_merged.scad", 
+    pin_con_dir_f='support_libs/pins_2.csv')
     
