@@ -5,7 +5,7 @@ use <./routing.scad>
 px = 0.0076;
 layer = 0.01;
 
-union() {
+
 difference() {
     cube([2550*px,1590*px,280*layer]);
     union() {
@@ -122,4 +122,3 @@ serpentine_100px_0(xpos = 1110.0, ypos = 690.0, zpos = 15, orientation = "S");
 } // end difference
 
 interconnect_32channel(1275.0, 795.0, 280);
-}

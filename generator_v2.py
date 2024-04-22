@@ -20,7 +20,10 @@ comp_block_reg = r'^COMPONENTS\s*\d*\s*;\w*\n(?|.*\n)*END\s*COMPONENTS$'
 comp_line_reg = r'^\s*-\s*(?P<name>\w*)\s*(?P<comp>\w*)\s*\+\s*PLACED\s*(\(\s*(?P<x1>\d*)\s*(?P<y1>\d*)\s*\)\s*(?P<dir>\w*))\s*;'
 
 nets_block_reg = r'^NETS\s*\d*\s*;\w*\n(?|.*\n)*END\s*NETS$'
-nets_line_reg = r'-\s*(?P<net>\w*)\s*(\(\s*(?P<dev1>\w*)\s*(?P<p1>\w*)\s*\))\s*(\(\s*(?P<dev2>\w*)\s*(?P<p2>\w*)\s*\))\s*\+\s*USE SIGNAL.*\s*\+\s*ROUTED.*\n(?|\s*NEW.*)*;$'
+#nets_line_reg = r'-\s*(?P<net>\w*)\s*(\(\s*(?P<dev1>\w*)\s*(?P<p1>\w*)\s*\))\s*(\(\s*(?P<dev2>\w*)\s*(?P<p2>\w*)\s*\))\s*\+\s*USE SIGNAL.*\s*\+\s*ROUTED.*\n(?|\s*NEW.*)*;$'
+#nets_line_reg = r'^[ ]*-\s*(?P<net>\w*)\s*(?P<dev_groups>(\(\s*\w*\s*\w*\s*\))\s*(\(\s*\w*\s*\w*\s*\)\s*?)+)\s*\+\s*USE SIGNAL.*\s*\+\s*ROUTED.*\n(?|\s*NEW.*)*;$'
+#nets_line_reg = r'^[ ]*-\s*(?P<net>\w*)\s*(?P<dev_groups>(\(\s*\w*\s*\w*\s*\)\s*?)+)\s*\+\s*USE SIGNAL.*\s*\+\s*ROUTED.*\n(?|\s*NEW.*)*;$'
+nets_line_reg = r'^[ ]*-\s*(?P<net>\w*)\s*(?P<dev_groups>[\(\s\w\)]*?)\s*\+\s*USE SIGNAL.*\s*\+\s*ROUTED.*\n(?|\s*NEW.*)*;$'
 nets_route_reg= r'(?:ROUTED|NEW)\s*(?P<layer>\w*)\s*((?:\(\s*(?P<x1>[\d\*]*)\s*(?P<y1>[\d\*]*)\s*(?P<z1>[\d\*]*)\s*\)))\s((?:\(\s*(?P<x2>[\d\*]*)\s*(?P<y2>[\d\*]*)\s*(?P<z2>[\d\*]*)\s*\)|(?P<via>\w*)))'
 
 # solid imports
@@ -57,8 +60,12 @@ def get_pins(in_def, in_pins_cdir, debug=True):
 
     if in_pins_cdir.split('.')[-1] == 'csv':
         in_pin_list = pd.read_csv(in_pins_cdir)
+        _only_top = False
     elif in_pins_cdir.split('.')[-1] == 'xlsx':
         in_pin_list = pd.read_excel(in_pins_cdir)
+        _only_top = False
+    elif in_pins_cdir == None:
+        _only_top = True
 
     for m in mo:
 
@@ -67,8 +74,12 @@ def get_pins(in_def, in_pins_cdir, debug=True):
         # iterate through pin objects
         for o in obj:
             pin_n = o.group('pin').decode('utf-8')
-            pin_f_i = in_pin_list.loc[in_pin_list['pin'] == pin_n].index
-            pin_cdir = in_pin_list['connect_direction'].iloc[pin_f_i[0]]
+            if not _only_top:
+                pin_f_i = in_pin_list.loc[in_pin_list['pin'] == pin_n].index
+                pin_cdir = in_pin_list['connect_direction'].iloc[pin_f_i[0]]
+            elif _only_top:
+                pin_cdir = 'TOP'
+
             if debug:
                 print(in_pin_list.loc[in_pin_list['pin'] == pin_n].index[0])
 
@@ -239,10 +250,10 @@ net_property = {
     'bot_layers':20
 }
 
-tlef_f = './def_test/test_1.tlef'
 
-def get_nets(in_def, tlef=None, tlef_property=None, debug={}, testing=False):
+def get_nets(in_def, tlef=None, tlef_property=None, report_len_file=None, debug={}, testing=False):
     mod_re = bytes(nets_block_reg, 'utf-8')
+    tlef_f = './def_test/test_1.tlef'
     #mod_re = regex.compile(nets_block_reg, re.MULTILINE)
 
     # parse template
@@ -280,11 +291,18 @@ def get_nets(in_def, tlef=None, tlef_property=None, debug={}, testing=False):
     for l in mo_l:
         mo_r = get_net_route(l.group(0))
 
+        net_dev_reg = r'\(\s*(?P<dev>\w+)\s+(?P<port>\w+)\s*\)'
+
+        print(l.group('net'))
+        print(l.group('dev_groups'))
+        devs = regex.finditer(bytes(net_dev_reg, 'utf-8'), l.group('dev_groups'))
+
+        dev_list = []
+        for d in devs:
+            dev_list.append({'dev':d.group('dev').decode('utf-8'), 'port':d.group('port').decode('utf-8')})
+
         n = Nets(net=l.group('net').decode('utf-8'),
-            dev1=l.group('dev1').decode('utf-8'),
-            p1=l.group('p1').decode('utf-8'),
-            dev2=l.group('dev2').decode('utf-8'),
-            p2=l.group('p2').decode('utf-8'),
+            devs=dev_list
             )
 
         nb.set_net(n)
@@ -330,6 +348,14 @@ def get_nets(in_def, tlef=None, tlef_property=None, debug={}, testing=False):
             n.compress_routes(debug=True)
         else:
             n.compress_routes()
+
+    if report_len_file is not None:
+        route_len_dict = {}
+        for n in nets_list:
+            route_len_dict[n.net] = n.report_len()
+        route_len_l = zip(*[route_len_dict.keys(),route_len_dict.values()])
+        pd.DataFrame(route_len_l, 
+            columns=['wire', 'length (mm)']).to_csv(report_len_file)
 
     return nets_list
     
@@ -383,8 +409,6 @@ def write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1], mode="w+"):
 
         pc_route = []
         
-
-
         for r in n.route:
             size = size
             pt = r
@@ -403,8 +427,34 @@ def write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1], mode="w+"):
         #)
         pc_route = str(pc_route).replace(']],', ']],\n').replace("'", '"')
 
+        #["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"],
+        dev_str = ''.join([f"""["{x['dev']}", "{x['port']}"], """for x in n.devs])
+
         f.write(f"""polychannel_route("{n.net}", 
-        ["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"],
+        [{dev_str}],
+        [],
+{pc_route}{nl});
+        """)
+
+        if n.dangle_routes:
+            for dr in n.dangling_routes:
+                pc_route = []
+                for r in dr['route']:
+                    size = size
+                    pt = r
+                    
+                    pc_pt1 = [shape, size, pt, rot]
+                    #pc_pt2 = [shape, size, pt2, rot]
+                    pc_route.append(pc_pt1)
+                
+                pc_route = str(pc_route).replace(']],', ']],\n').replace("'", '"')
+
+                #["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"],
+                dev_str = ''.join([f"""["{x['dev']}", "{x['port']}"], """for x in n.devs])
+
+                f.write(f"""polychannel_route("{n.net}", 
+        [{dev_str}],
+        [],
 {pc_route}{nl});
         """)
 
@@ -534,7 +584,7 @@ difference() {fb}
 
 routing_use = ['polychannel_v2', 'routing']
 
-def main(platform, design, def_file, results_dir, px, layer, bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, def_scale, pitch, res, dimm_file, tlef, comp_file, pin_con_dir_f, transparent=False):
+def main(platform, design, def_file, results_dir, px, layer, bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, def_scale, pitch, res, dimm_file, tlef, comp_file, pin_con_dir_f=None, transparent=False):
     
     print("""
     --------------------------------
@@ -558,6 +608,8 @@ def main(platform, design, def_file, results_dir, px, layer, bttm_layer, lpv, xb
 
     bulk = [xbulk, ybulk, zbulk] 
 
+    len_file = f'{design}_length.csv'
+
     # generation
     # overwrites previous file
     print(f"Starting writing @ {results_dir}")
@@ -577,7 +629,7 @@ layer = {layer};
 
     # write nets
     write_nets(o_file,
-        get_nets(def_file, tlef, net_properties),
+        get_nets(def_file, tlef, net_properties, report_len_file=results_dir+'/'+len_file),
         shape='cube',
         size=[0.1,0.1,0.1],
         mode='a')
@@ -641,10 +693,13 @@ if __name__ == "__main__":
     parser.add_argument('--res', type=int)
     parser.add_argument('--dimm_file', type=str)
     parser.add_argument('--tlef', type=str)
-    parser.add_argument('--comp_file', type=str)
-    parser.add_argument('--pin_file', type=str)
+    parser.add_argument('--comp_file', type=str, default=None)
+    parser.add_argument('--pin_file', type=str, default=None)
 
     args = parser.parse_args()
+
+    if args.comp_file == None:
+        args.comp_file = f"designs/{platform}/{design}/{design}.v"
 
     main(
         args.platform,

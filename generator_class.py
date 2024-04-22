@@ -7,18 +7,23 @@ class Nets:
     def __init__(
             self,
             net = None,
-            dev1 = None,
-            p1 = None,
-            dev2 = None,
-            p2 = None,
+            devs = None,
+            #dev1 = None,
+            #p1 = None,
+            #dev2 = None,
+            #p2 = None,
             ):
         self.net = net
-        self.dev1 = dev1
-        self.p1   = p1
-        self.dev2 = dev2
-        self.p2   = p2
+        #self.dev1 = dev1
+        #self.p1   = p1
+        #self.dev2 = dev2
+        #self.p2   = p2
+        self.devs = devs
         self.route = []
         self.compress = False
+        self.route_len = 0
+
+        self.dangle_routes = False
 
         # tlef definitions
 
@@ -42,6 +47,29 @@ class Nets:
 
         #print('Adding route: '+str(nr))
         self.route.append(nr)
+
+    def calc_len(self):
+        if not self.compress:
+            raise Exception("Routes need compression")
+        r_len = 0
+        for i, r in enumerate(self.route):
+            if i == 0:
+                print(len(self.route))
+                print(self.route)
+                continue
+            else:
+                r_lenx = abs(self.route[i-1][0] - self.route[i][0])**2
+                r_leny = abs(self.route[i-1][1] - self.route[i][1])**2
+                r_lenz = abs(self.route[i-1][2] - self.route[i][2])**2
+                r_len += (r_lenx+r_leny+r_lenz)**(1/2) 
+
+        self.route_len = r_len
+            
+    def report_len(self):
+        if self.route_len == 0:
+            self.calc_len()
+        return self.route_len
+            
 
     def compress_routes(self, debug=False):
 
@@ -81,7 +109,44 @@ class Nets:
                 else:
                     r_list.append(node)
 
+        def check_route_ends(r_nodes, r_list):
+            r = r_nodes
+            if r[0] == r_list[0]:
+                if debug: print(str(r[0])+" at head")
+                check_inner(r_list, r[1], head=True)
+                self.route.pop(ind)
+                return True
+                #rn.insert(0, r[1])
+            elif r[0] == r_list[-1]:
+                if debug: print(str(r[0])+" at tail")
+                check_inner(r_list, r[1], head=False)
+                self.route.pop(ind)
+                return True
+                #rn.append(r[1])
+            elif r[-1] == r_list[0]:
+                if debug: print(str(r[1])+" at head")
+                check_inner(r_list, r[0], head=True)
+                self.route.pop(ind)
+                return True
+                #rn.insert(0, r[0])
+            elif r[-1] == r_list[-1]:
+                if debug: print(str(r[1])+" at tail")
+                check_inner(r_list, r[0], head=False)
+                self.route.pop(ind)
+                return True
+                #rn.append(0, r[0])
+            else:
+                return False
+
+        def check_d_routes(r, d_routes):
+            for dr in d_routes:
+                if check_route_ends(r, dr['route']):
+                    return True
+            return False
+            
         nr = []
+        d_routes = []
+        self.dangle_routes = False
         count = 0
         r_len = len(self.route)
 
@@ -89,46 +154,87 @@ class Nets:
             print("initial routes:")
             print(self.route)
 
-        while len(nr) < r_len+1:
+        #while len(nr) + sum([len(x['route']) for x in d_routes]) < r_len+1:
+        #while len(self.route) > 1:    
+        while True:
+            #print(len(self.route))
             if debug: print("sr:"+str(len(self.route))+":"+str(self.route))
             if len(nr)>=1 and debug:
                 print("nr:"+str(len(nr))+":"+str(nr))
+            r_init_len = len(self.route)
             for ind, r in enumerate(self.route):
                 if len(nr) < 1:
                     self.route.pop(ind)
                     nr.append(r[0])
                     nr.append(r[1])
+                    break
                 else:
                     if debug: print("r:"+str(r))
-                    if r[0] == nr[0]:
-                        if debug: print(str(r[0])+" at head")
-                        check_inner(nr, r[1], head=True)
-                        self.route.pop(ind)
+                    if check_route_ends(r, nr):
                         break
-                        #rn.insert(0, r[1])
-                    elif r[0] == nr[-1]:
-                        if debug: print(str(r[0])+" at tail")
-                        check_inner(nr, r[1], head=False)
+                    if len(d_routes) > 0:
+                        if check_d_routes(r, d_routes):
+                            break
+                        #for dr in d_routes:
+                        #    if check_route_ends(r, dr['route']):
+                        #        break
+                    # no matches
+                    # check if node is internal
+                    if len(nr) > 4 and r[0] in nr[2:-3]:
+                        d_routes.append({'head':r[0], 'route':r})
                         self.route.pop(ind)
+                        self.dangle_routes = True
+                        print("has dangling route")
                         break
-                        #rn.append(r[1])
-                    elif r[1] == nr[0]:
-                        if debug: print(str(r[1])+" at head")
-                        check_inner(nr, r[0], head=True)
+                    if len(nr) > 4 and r[1] in nr[2:-3]:
+                        d_routes.append({'head':r[1], 'route':r})
                         self.route.pop(ind)
+                        self.dangle_routes = True
+                        print("has dangling route")
                         break
-                        #rn.insert(0, r[0])
-                    elif r[1] == nr[-1]:
-                        if debug: print(str(r[1])+" at tail")
-                        check_inner(nr, r[0], head=False)
+                # TODO start new route after running through entire list
+                if ind +1 == r_init_len:
+                    # loops again otherwise ind is too large
+                    if len(self.route) == r_init_len:
+                        d_routes.append({'head':None, 'route':r})
                         self.route.pop(ind)
-                        break
+                        self.dangle_routes = True
+                        print("has dangling route (Unconnected)")
+
+                    #if r[0] == nr[0]:
+                    #    if debug: print(str(r[0])+" at head")
+                    #    check_inner(nr, r[1], head=True)
+                    #    self.route.pop(ind)
+                    #    break
+                    #    #rn.insert(0, r[1])
+                    #elif r[0] == nr[-1]:
+                    #    if debug: print(str(r[0])+" at tail")
+                    #    check_inner(nr, r[1], head=False)
+                    #    self.route.pop(ind)
+                    #    break
+                    #    #rn.append(r[1])
+                    #elif r[1] == nr[0]:
+                    #    if debug: print(str(r[1])+" at head")
+                    #    check_inner(nr, r[0], head=True)
+                    #    self.route.pop(ind)
+                    #    break
+                    #    #rn.insert(0, r[0])
+                    #elif r[1] == nr[-1]:
+                    #    if debug: print(str(r[1])+" at tail")
+                    #    check_inner(nr, r[0], head=False)
+                    #    self.route.pop(ind)
+                    #    break
                         #rn.append(0, r[0])
+
+            if len(self.route) < 1:
+                break
+                    
             if debug: print('\n')
             count += 1
             if count > 100:
                 raise Exception("Unable to complete route before 100 inters")
 
+        self.dangling_routes = d_routes
         self.route = nr
 
         if debug:
@@ -226,10 +332,11 @@ class Nets:
     def print_net(self):
         r = str(self.route).replace(']],', ']],\n')
 
+        dev_str = [f"Dev{i+1}: {x['dev']} : {x['port']}"+'\n' for i, x in enumerate(self.devs)]
+
         print(f"""
         Net: {self.net}
-        Dev1: {self.dev1} : {self.p1}
-        Dev2: {self.dev2} : {self.p2}
+        {dev_str}
         Route: {r}
         """)
 
@@ -258,6 +365,7 @@ class NetBuilder:
 
     def import_tlef(self, tlef_f):
         
+        print(tlef_f)
         # get layers
         layer_re = r'LAYER\s*(?P<layer_name>\w*)\s*(?|(?:TYPE\s*(?P<type>(?:ROUTING|CUT))\s*;|DIRECTION\s*(?P<direction>(?:HORIZONTAL|VERTICAL))\s*;|MINWIDTH\s*(?P<minwidth>[\d.]*)\s*;|WIDTH\s*(?P<width>[\d.]*)\s*;)\s*)*END\s*(\w*)\s$' 
         layer_re = bytes(layer_re, 'utf-8')

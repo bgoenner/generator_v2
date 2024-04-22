@@ -48,7 +48,7 @@ def test_paser_nets():
     'compress_routes' : False,
     }
 
-    nets = get_nets(i_file, net_property, debug=db, testing=True)
+    nets = get_nets(i_file, tlef_property=net_property, debug=db, testing=True, testing=True)
 
     print(nets)
     print([x.print_net() for x in nets])
@@ -69,6 +69,20 @@ def test_write_nets():
     #write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1])
     write_nets(o_file, nets)
 
+def test_write_nets_2():
+
+    import os
+
+    from generator_v2 import write_nets, get_nets
+
+    i_file = os.getcwd()+'/def_test/test_2_3in.def'
+
+    o_file = os.getcwd()+'/test_output/test_2_3in_routes.scad'
+
+    nets = get_nets(i_file, testing=True)
+
+    #write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1])
+    write_nets(o_file, nets)
 
 def test_write_comps():
 
@@ -185,15 +199,62 @@ def test_main():
     def_scale=1000, 
     pitch=30, 
     res=120, 
-    dimm_file=None,
-    tlef='def_test/test_1.tlef',
-    comp_file="h.r.3.3_pdk_merged.scad", 
+    dimm_file=None, 
+    comp_file="support_libs/h.r.3.3_pdk_merged.scad",
+    tlef="def_test/test_1.tlef",
     pin_con_dir_f='support_libs/pins.csv')
     
-def test_make():
+def test_2_main():
 
-    import os, subprocess
+    import os
+    from generator_v2 import main
 
-    run_cmd = 'cd tests && make render'
+    main(
+    platform='h.r.3.3_pdk', 
+    design='test_2_3in', 
+    def_file='def_test/test_2_3in.def', 
+    results_dir='test_output/main_test', 
+    px=0.0076, 
+    layer=0.01, 
+    bttm_layer=20, 
+    lpv=20, 
+    xbulk=2550, 
+    ybulk=1590, 
+    zbulk=280, 
+    xchip=[0, 2550], 
+    ychip=[0, 1590], 
+    def_scale=1000, 
+    pitch=30, 
+    res=120, 
+    dimm_file=None,
+    tlef="def_test/test_1.tlef",
+    comp_file="support_libs/h.r.3.3_pdk_merged.scad", 
+    pin_con_dir_f='support_libs/pins_2.csv')
 
-    subprocess.run(run_cmd.split(), shell=True)
+def test_3_main():
+
+    import os
+    from generator_v2 import main
+
+    main(
+    platform='h.r.3.3_pdk', 
+    design='test_3', 
+    def_file='def_test/test_3.def', 
+    results_dir='test_output/main_test', 
+    px=0.0076, 
+    layer=0.01, 
+    bttm_layer=20, 
+    lpv=20, 
+    xbulk=2550, 
+    ybulk=1590, 
+    zbulk=280, 
+    xchip=[0, 2550], 
+    ychip=[0, 1590], 
+    def_scale=1000, 
+    pitch=30, 
+    res=120, 
+    dimm_file=None,
+    tlef="def_test/test_1.tlef",
+    comp_file="support_libs/h.r.3.3_pdk_merged.scad", 
+    pin_con_dir_f='support_libs/pins_2.csv')
+    
