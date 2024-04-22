@@ -422,7 +422,9 @@ def write_imports(o_file, comp_file, routing_use, scad_lib_dir='.', copy=False, 
     of = open(o_file, mode)
 
     sc_base = '/'.join(os.path.realpath(__file__).split('/')[:-1]+\
-        ['support_libs'])
+        ['support_libs'])Bruce K Gale
+  Chair and Merit Medical Systems Inc. Endowed Engineering Professor
+
 
     if '/' in comp_file:
         comp_dir = '.'
