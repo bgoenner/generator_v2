@@ -59,7 +59,7 @@ Held over from previous code, unused.
 Held over from previous code, unused.
 
 --def_scale \
-units to scale def_file. In the tests use 1000 since the def file unit is in microns and rendered files unit is in mm.
+Units to scale def_file. In the tests use 1000 since the def file unit is in microns and rendered files unit is in mm. This is confounded by the pixel definitions and are not to be included in the scale.
 
 --pitch \
 Wire pitch of device, this is defined elsewhere for PnR. Changing this will have no effect on rendering.
