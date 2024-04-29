@@ -1,6 +1,6 @@
 # SCAD generator V2
 
-A redevelopment of a verilog/def to SCAD converter for the OpenMFDA project. Was developed as a coding exercise but has become a pretty robust set of code.
+A redevelopment of a verilog/def to SCAD converter for the OpenMFDA project. Was developed as a coding exercise but has become a pretty robust set of code. It purely just writes the SCAD code needed to generate the device in OpenSCAD. No STL generation has been implemented yet.
 
 ### Improvements from previous version
 - Calls the TLEF file for some definitions, the effort is to pull from the geometric definitions used in OpenROAD to reduce the amount of redundent variables.
