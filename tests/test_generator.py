@@ -48,7 +48,7 @@ def test_paser_nets():
     'compress_routes' : False,
     }
 
-    nets = get_nets(i_file, tlef_property=net_property, debug=db, testing=True)
+    nets = get_nets(i_file, tlef_property=net_property, debug=db, testing=True, testing=True)
 
     print(nets)
     print([x.print_net() for x in nets])
