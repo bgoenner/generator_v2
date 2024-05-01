@@ -47,7 +47,7 @@ mets = {
     'met9':8,
 }
 
-def get_pins(in_def, in_pins_cdir, debug=True):
+def get_pins(in_def, in_pins_cdir, debug=False):
     
     pins={}
 
@@ -58,14 +58,14 @@ def get_pins(in_def, in_pins_cdir, debug=True):
         data = mmap.mmap(f.fileno(), 0)
         mo = regex.findall(mod_re, data, re.MULTILINE)
 
-    if in_pins_cdir.split('.')[-1] == 'csv':
+    if in_pins_cdir == None:
+        _only_top = True
+    elif in_pins_cdir.split('.')[-1] == 'csv':
         in_pin_list = pd.read_csv(in_pins_cdir)
         _only_top = False
     elif in_pins_cdir.split('.')[-1] == 'xlsx':
         in_pin_list = pd.read_excel(in_pins_cdir)
         _only_top = False
-    elif in_pins_cdir == None:
-        _only_top = True
 
     for m in mo:
 
@@ -81,7 +81,8 @@ def get_pins(in_def, in_pins_cdir, debug=True):
                 pin_cdir = 'TOP'
 
             if debug:
-                print(in_pin_list.loc[in_pin_list['pin'] == pin_n].index[0])
+                if not _only_top:
+                    print(in_pin_list.loc[in_pin_list['pin'] == pin_n].index[0])
 
             pins[pin_n] = Pin(
             name=pin_n,
@@ -472,8 +473,7 @@ def write_imports(o_file, comp_file, routing_use, scad_lib_dir='.', copy=False, 
     of = open(o_file, mode)
 
     sc_base = '/'.join(os.path.realpath(__file__).split('/')[:-1]+\
-        ['support_libs'])Bruce K Gale
-  Chair and Merit Medical Systems Inc. Endowed Engineering Professor
+        ['support_libs'])
 
 
     if '/' in comp_file:
@@ -584,13 +584,19 @@ difference() {fb}
 
 routing_use = ['polychannel_v2', 'routing']
 
-def main(platform, design, def_file, results_dir, px, layer, bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, def_scale, pitch, res, dimm_file, tlef, comp_file, pin_con_dir_f=None, transparent=False):
+def main(platform, design, def_file, results_dir, px, layer, 
+         bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, 
+         def_scale, pitch, res, dimm_file, tlef, comp_file=None, 
+         pin_con_dir_f=None, transparent=False):
     
     print("""
     --------------------------------
           OpenSCAD generation
     --------------------------------
     """)
+
+    if comp_file == None:
+        comp_file = f"designs/{platform}/{design}/{design}.v"
 
     o_file = f"{results_dir}/{design}.scad"
 
@@ -698,8 +704,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.comp_file == None:
-        args.comp_file = f"designs/{platform}/{design}/{design}.v"
 
     main(
         args.platform,
