@@ -48,7 +48,7 @@ def test_paser_nets():
     'compress_routes' : False,
     }
 
-    nets = get_nets(i_file, tlef_property=net_property, debug=db, testing=True, testing=True)
+    nets = get_nets(i_file, tlef_property=net_property, debug=db, testing=True)
 
     print(nets)
     print([x.print_net() for x in nets])
@@ -283,4 +283,5 @@ def test_3_main_pcell():
     dimm_file=None,
     tlef="def_test/test_1.tlef",
     comp_file="support_libs/h.r.3.3_pdk_merged.scad", 
-    pin_con_dir_f='support_libs/pins_2.csv')
+    pin_con_dir_f='support_libs/pins_2.csv',
+    pcell_file='def_test/pcell_out_scad')

@@ -218,10 +218,27 @@ def get_comp_line(in_comp):
 
     return mo
 
-def write_components(o_file, comp_list, layer_h, px, mode="w+"):
+def write_components(o_file, comp_list, layer_h, px, mode="w+", pcell_file=None):
 
     if  isinstance(o_file, str):
         o_file = open(o_file, mode)
+
+    pc_dict = {}
+
+    if isinstance(pcell_file, str):
+        has_pcells = True
+        with open(pcell_file, 'r+') as pc_if:
+            import csv
+            pc_reader = csv.reader(pc_if)
+            for i, row in enumerate(pc_reader):
+                if i == 0:
+                    continue
+                else:
+                    pc_dict[row[0]] = {'pcell':row[1], 'params':row[2]}
+    else:
+        has_pcells = False
+
+    print('pcell dict: ', pc_dict)
 
     o_file.write(f"""
 // Components
@@ -233,7 +250,15 @@ def write_components(o_file, comp_list, layer_h, px, mode="w+"):
         cz1 = net_property['bot_layers'] - 5 
         # all components have a 5 layer offset for some reason 
 
-        o_file.write(f"""// {c.name}
+        if has_pcells and (c.comp in pc_dict):
+            o_file.write(f'''// {c.name}
+{pc_dict[c.comp]["pcell"]}(xpos = {cx1}, ypos = {cy1}, zpos = {cz1}, orientation = "{c.dir}"''')
+
+            cell_params = ', '.join(pc_dict[c.comp]['params'].split(' '))
+            o_file.write(f", {cell_params} ")
+            o_file.write(');\n')
+        else:
+            o_file.write(f"""// {c.name}
 {c.comp}(xpos = {cx1}, ypos = {cy1}, zpos = {cz1}, orientation = "{c.dir}");
 """)
 
@@ -472,8 +497,7 @@ def write_imports(o_file, comp_file, routing_use, scad_lib_dir='.', copy=False, 
     of = open(o_file, mode)
 
     sc_base = '/'.join(os.path.realpath(__file__).split('/')[:-1]+\
-        ['support_libs'])Bruce K Gale
-  Chair and Merit Medical Systems Inc. Endowed Engineering Professor
+        ['support_libs'])
 
 
     if '/' in comp_file:
@@ -584,7 +608,10 @@ difference() {fb}
 
 routing_use = ['polychannel_v2', 'routing']
 
-def main(platform, design, def_file, results_dir, px, layer, bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, def_scale, pitch, res, dimm_file, tlef, comp_file, pin_con_dir_f=None, transparent=False):
+def main(platform, design, def_file, results_dir, px, layer, 
+bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, def_scale, 
+pitch, res, dimm_file, tlef, comp_file, pin_con_dir_f=None, 
+transparent=False, pcell_file=None):
     
     print("""
     --------------------------------
@@ -627,7 +654,7 @@ layer = {layer};
     # initial bulk generation
     write_bulk(o_file, bulk, transparent, mode='a')
 
-    # write nets
+    # write nets (routes)
     write_nets(o_file,
         get_nets(def_file, tlef, net_properties, report_len_file=results_dir+'/'+len_file),
         shape='cube',
@@ -639,7 +666,8 @@ layer = {layer};
         get_components(def_file),
         net_property['layer'],
         net_property['px'],
-        mode='a')
+        mode='a',
+        pcell_file=pcell_file)
 
     # write pin vias
     write_pins(o_file,
@@ -695,6 +723,7 @@ if __name__ == "__main__":
     parser.add_argument('--tlef', type=str)
     parser.add_argument('--comp_file', type=str, default=None)
     parser.add_argument('--pin_file', type=str, default=None)
+    parser.add_argument('--pcell_file', type=str, default=None)
 
     args = parser.parse_args()
 
@@ -722,4 +751,5 @@ if __name__ == "__main__":
         args.tlef,
         args.comp_file,
         args.pin_file,
+        args.pcell_file,
     )

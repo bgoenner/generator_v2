@@ -272,7 +272,7 @@ diffmix_25px_0(xpos = 1320.0, ypos = 750.0, zpos = 15, orientation = "S");
 // mix3
 diffmix_25px_0(xpos = 1410.0, ypos = 750.0, zpos = 15, orientation = "FS");
 // serp1
-serpentine_300px_2(xpos = 930.0, ypos = 840.0, zpos = 15, orientation = "N");
+p_serpentine_0(xpos = 930.0, ypos = 840.0, zpos = 15, orientation = "N", X1=50.0, Y1=200.0 );
 // serp2
 serpentine_300px_2(xpos = 1380.0, ypos = 840.0, zpos = 15, orientation = "N");
 // serp3
