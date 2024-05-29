@@ -276,7 +276,7 @@ net_property = {
 }
 
 
-def get_nets(in_def, tlef=None, tlef_property=None, report_len_file=None, debug={}, testing=False):
+def get_nets(in_def, tlef=None, tlef_property=None, report_len_file=None, design='', debug={}, testing=False):
     mod_re = bytes(nets_block_reg, 'utf-8')
     tlef_f = './def_test/test_1.tlef'
     #mod_re = regex.compile(nets_block_reg, re.MULTILINE)
@@ -370,9 +370,9 @@ def get_nets(in_def, tlef=None, tlef_property=None, report_len_file=None, debug=
 
     for n in nets_list:
         if 'compress_routes' in debug and debug['compress_routes']==True:
-            n.compress_routes(debug=True)
+            n.compress_routes(debug=True, design=design)
         else:
-            n.compress_routes()
+            n.compress_routes(design=design)
 
     if report_len_file is not None:
         route_len_dict = {}
@@ -656,7 +656,7 @@ layer = {layer};
 
     # write nets (routes)
     write_nets(o_file,
-        get_nets(def_file, tlef, net_properties, report_len_file=results_dir+'/'+len_file),
+        get_nets(def_file, tlef, net_properties, report_len_file=results_dir+'/'+len_file, design=design),
         shape='cube',
         size=[0.1,0.1,0.1],
         mode='a')

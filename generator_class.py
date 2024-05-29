@@ -71,7 +71,7 @@ class Nets:
         return self.route_len
             
 
-    def compress_routes(self, debug=False):
+    def compress_routes(self, debug=False, design='', report_route=True):
 
         if self.compress:
             raise Exception("Routes already compressed")
@@ -143,7 +143,65 @@ class Nets:
                 if check_route_ends(r, dr['route']):
                     return True
             return False
+
+        def check_if_ends_in_route(route, d_routes):
+            # check if route head or tail in other routes
+            #r_head_in_dr = False
+            #r_tail_in_dr = False
+
+            dr_head_in_r = [False]*(len(d_routes)+1)
+            dr_tail_in_r = [False]*(len(d_routes)+1)
+
+            in_routes = []
+            in_routes.append(routes)
+            for dr in d_routes:
+                in_routes.append(dr['route'])
+
+            def check_ends_in_route(route_ends_check, targ_route):
+                for pt in targ_route:
+                    if route_ends_check[0] == pt:
+                        return "head"
+                    elif route_ends_check[-1] == pt:
+                        return "tail"
+                return False
+
+            #for ind, seg in enumerate(d_routes):
+            #    seg_return = check_if_ends_in_route(self.route, seg['route'])
+            #    if seg_return == "head":
+            #        r_head_in_dr = ind
+            #    elif seg_return == "tail":
+            #        r_tail_in_dr = ind
+            #    if r_head_in_dr and r_tail_in_dr: # stop once ends are found
+            #        break
+
+            # check route first
+            #for ind, dr in enumerate(d_routes):
+            #    seg_return = check_ends_in_route(dr['route'], route)
+            #    if seg_return == "head":
+            #        dr_head_in_r[ind] = "r"
+            #    elif seg_return == "tail":
+            #        dr_tail_in_r[ind] = "r"
+            #    if dr_head_in_r[ind] and dr_tail_in_r[ind]: # stop once ends are found
+            #        break
+
+            # check d_routes
+            for ind_ends, dr_ends in enumerate(in_routes):
+                for ind_ch, dr_ch in enumerate(in_routes):
+                    if ind_ends == ind_ch: # this means we are checking the same route, skip
+                        continue 
+                    seg_return = check_ends_in_route(dr_ends['route'], dr_ch['route'])
+                if seg_return == "head":
+                    dr_head_in_r[ind_ends] = ind_ch
+                elif seg_return == "tail":
+                    dr_tail_in_r[ind_ends] = ind_ch
+                if dr_head_in_r[ind_ends] and dr_tail_in_r[ind_ends]: # stop once ends are found
+                    break
             
+            new_routes = []
+            # break routes
+
+
+
         nr = []
         d_routes = []
         self.dangle_routes = False
@@ -233,6 +291,17 @@ class Nets:
             count += 1
             if count > 100:
                 raise Exception("Unable to complete route before 100 inters")
+
+        if report_route:
+            route_report_file = f"routes_out_{design}.txt"
+            rep_out = open(route_report_file, 'a+')
+            rep_out.write(f"Net:{self.net}\nDevs:{self.devs}\nroutes:\n{nr}\n")
+            if self.dangle_routes:
+                for r in d_routes:
+                    rep_out.write(f"{r}\n")
+
+        if self.dangle_routes:
+            pass
 
         self.dangling_routes = d_routes
         self.route = nr
