@@ -1,6 +1,7 @@
 
 import json
 import regex, mmap, re
+import networkx as nx
 
 class Nets:
     
@@ -48,30 +49,52 @@ class Nets:
         #print('Adding route: '+str(nr))
         self.route.append(nr)
 
-    def calc_len(self):
+    def calc_len_funct(self, in_route=None):
+        if isinstance(in_route, list):
+            pass
+        elif isinstance(in_route, type(None)):
+            in_route=self.route
+        else:
+            raise ValueError(f'in_route is {type(in_route)}; should be lsit')
+
         if not self.compress:
             raise Exception("Routes need compression")
         r_len = 0
-        for i, r in enumerate(self.route):
+        for i, r in enumerate(in_route):
             if i == 0:
-                print(len(self.route))
-                print(self.route)
+                print(len(in_route))
+                print(in_route)
                 continue
             else:
-                r_lenx = abs(self.route[i-1][0] - self.route[i][0])**2
-                r_leny = abs(self.route[i-1][1] - self.route[i][1])**2
-                r_lenz = abs(self.route[i-1][2] - self.route[i][2])**2
+                r_lenx = abs(in_route[i-1][0] - in_route[i][0])**2
+                r_leny = abs(in_route[i-1][1] - in_route[i][1])**2
+                r_lenz = abs(in_route[i-1][2] - in_route[i][2])**2
                 r_len += (r_lenx+r_leny+r_lenz)**(1/2) 
 
-        self.route_len = r_len
+        return r_len
+        #self.route_len = r_len
             
+    def calc_len(self):
+        print(f"calc len {self.net}")
+        print(self.route.nodes)
+        if isinstance(self.route, nx.Graph):
+            len_dict = {}
+            for nd in self.route.nodes:
+                if 'route' in self.route.nodes[nd]:
+                    len_dict[nd] = self.calc_len_funct(self.route.nodes[nd]['route'])
+            self.route_len = len_dict
+        else:
+            self.route_len = self.calc_len_funct()
+
     def report_len(self):
         if self.route_len == 0:
             self.calc_len()
         return self.route_len
             
+    def report_route_graph(self):
+        return nx.node_link_data(self.route)
 
-    def compress_routes(self, debug=False, design='', report_route=True):
+    def compress_routes(self, debug=True, design='', report_route=True, subsegment=True):
 
         if self.compress:
             raise Exception("Routes already compressed")
@@ -144,26 +167,28 @@ class Nets:
                     return True
             return False
 
-        def check_if_ends_in_route(route, d_routes):
+        def subsegment_routes(route, d_routes):
             # check if route head or tail in other routes
             #r_head_in_dr = False
             #r_tail_in_dr = False
+
+            # It is assumed in this method we do not have loops in a 'wire'
 
             dr_head_in_r = [False]*(len(d_routes)+1)
             dr_tail_in_r = [False]*(len(d_routes)+1)
 
             in_routes = []
-            in_routes.append(routes)
+            in_routes.append({'route':route, 'head':False, 'tail':False, 'break':[]})
             for dr in d_routes:
-                in_routes.append(dr['route'])
+                in_routes.append({'route':dr['route'], 'head':False, 'tail':False, 'break':[]})
 
             def check_ends_in_route(route_ends_check, targ_route):
-                for pt in targ_route:
+                for ind, pt in enumerate(targ_route):
                     if route_ends_check[0] == pt:
-                        return "head"
+                        return "head", pt, ind
                     elif route_ends_check[-1] == pt:
-                        return "tail"
-                return False
+                        return "tail", pt, ind
+                return False, None, None
 
             #for ind, seg in enumerate(d_routes):
             #    seg_return = check_if_ends_in_route(self.route, seg['route'])
@@ -185,21 +210,81 @@ class Nets:
             #        break
 
             # check d_routes
-            for ind_ends, dr_ends in enumerate(in_routes):
-                for ind_ch, dr_ch in enumerate(in_routes):
-                    if ind_ends == ind_ch: # this means we are checking the same route, skip
-                        continue 
-                    seg_return = check_ends_in_route(dr_ends['route'], dr_ch['route'])
-                if seg_return == "head":
-                    dr_head_in_r[ind_ends] = ind_ch
-                elif seg_return == "tail":
-                    dr_tail_in_r[ind_ends] = ind_ch
-                if dr_head_in_r[ind_ends] and dr_tail_in_r[ind_ends]: # stop once ends are found
-                    break
-            
-            new_routes = []
-            # break routes
 
+            # TODO what if a break is at another break
+            for ind_ends, dr_ends in enumerate(in_routes):
+                for ind_srch, dr_srch in enumerate(in_routes):
+                    if ind_ends == ind_srch: # this means we are checking the same route, skip
+                        continue 
+                    seg_return, out_pt, out_pt_ind = check_ends_in_route(dr_ends['route'], dr_srch['route'])
+                    if seg_return == "head":
+                        #dr_head_in_r[ind_ends] = ind_ch
+                        in_routes[ind_ends]['head'] = ind_srch
+                        # TODO check if exists, ifso append
+                        in_routes[ind_srch]['break'].append({'pt_ind':out_pt_ind ,'pt':out_pt, 'r_ind':[[ind_ends, 'head']]})
+                    elif seg_return == "tail":
+                        #dr_tail_in_r[ind_ends] = ind_ch
+                        in_routes[ind_ends]['tail'] = ind_srch
+                        in_routes[ind_srch]['break'].append({'pt_ind':out_pt_ind ,'pt':out_pt, 'r_ind':[[ind_ends, 'tail']]})
+                    if in_routes[ind_ends]['head'] and in_routes[ind_ends]['tail']: # stop once ends are found
+                        break
+            
+            new_routes = {}
+            # break routes
+            
+
+            net_G = nx.Graph()
+            if debug: print(f"Subsegment net {self.net}")
+
+            for ind, r_t in enumerate(in_routes):
+                br_count = 0 # since 0 is the head of the route
+                last_br_ind = 0
+                # we want to go low to high nodes
+                r_t['break'] = sorted(r_t['break'], key=lambda k : k['pt_ind'])
+                if debug: print(f'breaks for {ind}: ', r_t['break'])
+                if debug: print(f'route: {r_t["route"]}')
+                for br_pt in r_t['break']:
+                    new_node = f'{ind}_{br_count}'
+                    # check if node exists; they can be created through add_edge
+                    if new_node in net_G.nodes:
+                        net_G.nodes[new_node]['route'] = r_t['route'][last_br_ind:br_pt['pt_ind']+1]
+                    else:
+                        net_G.add_node(f'{ind}_{br_count}', route=r_t['route'][last_br_ind:br_pt['pt_ind']+1])
+                    
+                    net_G.add_edge(f'{ind}_{br_count}', f'br_{ind}_{br_count}')
+                    net_G.add_edge(f'{ind}_{br_count+1}', f'br_{ind}_{br_count}')
+                    # check if node is at 0 or 1; this adds the branching route node and edge
+                    for ch_end in list(br_pt['r_ind']):
+                        # number of breaks in ref route
+                        num_br = len(in_routes[ch_end[0]]["break"])
+                        if ch_end[1] == "head":
+                            net_G.add_edge(f'{ch_end[0]}_{0}', f'br_{ind}_{br_count}')
+                        elif ch_end[1] == "tail": # we assume last seg is # of break pts
+                            net_G.add_edge(f'{ch_end[0]}_{num_br}', f'br_{ind}_{br_count}')
+                    if debug: print(f"branch route {new_node}: {net_G.nodes[new_node]['route']}")
+                    
+                    last_br_ind = br_pt['pt_ind']
+                    # create final route
+                    if ind == len(r_t['break'])-1:
+                        # last element is == to len? (but it works??? vvvv)
+                        net_G.nodes[f'{ind}_{br_count+1}']['route'] = r_t['route'][last_br_ind:len(r_t['route'])]
+                        if debug: print(f"last branch route {ind}_{br_count+1}: {net_G.nodes[f'{ind}_{br_count+1}']['route']}")
+
+                    br_count += 1
+                # create final route
+                #if ind == len(r_t['break']):
+                #net_G.nodes[f'{ind}_{br_count}']['route'] = r_t['route'][last_br_ind:-1]
+
+                if len(r_t['break']) == 0:
+                    if f'{ind}_0' in net_G:
+                        net_G.nodes[f'{ind}_0']['route'] = r_t['route']
+                    else:
+                        net_G.add_node(f'{ind}_0', route=r_t['route'])
+
+                    
+            
+            return net_G
+            
 
 
         nr = []
@@ -300,11 +385,12 @@ class Nets:
                 for r in d_routes:
                     rep_out.write(f"{r}\n")
 
-        if self.dangle_routes:
-            pass
-
-        self.dangling_routes = d_routes
-        self.route = nr
+        if self.dangle_routes and subsegment:
+            self.route = subsegment_routes(nr, d_routes)
+        else:
+            self.dangling_routes = d_routes
+            self.route = nx.Graph()
+            self.route.add_node('', route=nr)
 
         if debug:
             print("Final routes:")

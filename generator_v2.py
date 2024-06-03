@@ -276,7 +276,7 @@ net_property = {
 }
 
 
-def get_nets(in_def, tlef=None, tlef_property=None, report_len_file=None, design='', debug={}, testing=False):
+def get_nets(in_def, design, tlef=None, tlef_property=None, report_len_file=None, debug={}, testing=False):
     mod_re = bytes(nets_block_reg, 'utf-8')
     tlef_f = './def_test/test_1.tlef'
     #mod_re = regex.compile(nets_block_reg, re.MULTILINE)
@@ -376,12 +376,20 @@ def get_nets(in_def, tlef=None, tlef_property=None, report_len_file=None, design
 
     if report_len_file is not None:
         route_len_dict = {}
+        route_graph_dict = {}
         for n in nets_list:
             route_len_dict[n.net] = n.report_len()
+            route_graph_dict[n.net] = n.report_route_graph()
         route_len_l = zip(*[route_len_dict.keys(),route_len_dict.values()])
         pd.DataFrame(route_len_l, 
             columns=['wire', 'length (mm)']).to_csv(report_len_file)
-
+        if '/' in report_len_file:
+            dirname = os.path.dirname(report_len_file)+'/'
+        else:
+            dirname = ''
+        with open(dirname+f"{design}_route_nets.json", "w+") as of_rnets:
+            of_rnets.write(json.dumps(route_graph_dict))
+        
     return nets_list
     
 
@@ -434,54 +442,65 @@ def write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1], mode="w+"):
 
         pc_route = []
         
-        for r in n.route:
-            size = size
-            pt = r
-            
-            pc_pt1 = [shape, size, pt, rot]
-            #pc_pt2 = [shape, size, pt2, rot]
-
-            pc_route.append(pc_pt1)
-            #pc_rotue.append(pc_pt2)
-            # todo
-
-
-        #new_pc = pc.polychannel_route(
-        #    n.net, [n.dev1, n.p1], [n.dev2, n.p2],
-        #    str(pc_route).replace(']],', ']],\n')
-        #)
-        pc_route = str(pc_route).replace(']],', ']],\n').replace("'", '"')
-
-        #["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"],
-        dev_str = ''.join([f"""["{x['dev']}", "{x['port']}"], """for x in n.devs])
-
-        f.write(f"""polychannel_route("{n.net}", 
-        [{dev_str}],
-        [],
-{pc_route}{nl});
-        """)
-
-        if n.dangle_routes:
-            for dr in n.dangling_routes:
-                pc_route = []
-                for r in dr['route']:
+        for r in n.route.nodes:
+            pc_route = []
+            #print(n.route[r])
+            if 'route' in n.route.nodes[r]:
+                for pt in n.route.nodes[r]['route']:
                     size = size
-                    pt = r
+                    #pt = r
                     
                     pc_pt1 = [shape, size, pt, rot]
                     #pc_pt2 = [shape, size, pt2, rot]
+
                     pc_route.append(pc_pt1)
-                
-                pc_route = str(pc_route).replace(']],', ']],\n').replace("'", '"')
+                    #pc_rotue.append(pc_pt2)
+                    # todo
+            else:
+                continue # does not write empty routes
 
-                #["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"],
-                dev_str = ''.join([f"""["{x['dev']}", "{x['port']}"], """for x in n.devs])
 
-                f.write(f"""polychannel_route("{n.net}", 
+            #new_pc = pc.polychannel_route(
+            #    n.net, [n.dev1, n.p1], [n.dev2, n.p2],
+            #    str(pc_route).replace(']],', ']],\n')
+            #)
+            pc_route = str(pc_route).replace(']],', ']],\n').replace("'", '"')
+
+            #["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"],
+            dev_str = ''.join([f"""["{x['dev']}", "{x['port']}"], """for x in n.devs])
+
+            if r == '':
+                r_str = ''
+            else:
+                r_str = f'({r})'
+
+            f.write(f"""polychannel_route("{n.net}{r_str}", 
         [{dev_str}],
         [],
 {pc_route}{nl});
         """)
+
+        #if n.dangle_routes:
+        #    for dr in n.dangling_routes:
+        #        pc_route = []
+        #        for r in dr['route']:
+        #            size = size
+        #            pt = r
+        #            
+        #            pc_pt1 = [shape, size, pt, rot]
+        #            #pc_pt2 = [shape, size, pt2, rot]
+        #            pc_route.append(pc_pt1)
+        #        
+        #        pc_route = str(pc_route).replace(']],', ']],\n').replace("'", '"')#
+        #
+        #        #["{n.dev1}", "{n.p1}"], ["{n.dev2}", "{n.p2}"],
+        #        dev_str = ''.join([f"""["{x['dev']}", "{x['port']}"], """for x in n.devs])
+        #
+        #        f.write(f"""polychannel_route("{n.net}", 
+        #[{dev_str}],
+        #[],
+#{pc_route}{nl});
+        #""")
 
 
         if rend == None:
@@ -639,7 +658,7 @@ transparent=False, pcell_file=None):
 
     # generation
     # overwrites previous file
-    print(f"Starting writing @ {results_dir}")
+    print(f"Starting writing @ {results_dir}/{design}.scad")
     os.makedirs(results_dir, exist_ok=True)
 
     write_imports(o_file, comp_file, routing_use, './support_libs', mode='w+', copy=True, results_dir=results_dir)
@@ -656,7 +675,7 @@ layer = {layer};
 
     # write nets (routes)
     write_nets(o_file,
-        get_nets(def_file, tlef, net_properties, report_len_file=results_dir+'/'+len_file, design=design),
+        get_nets(def_file, design, tlef, net_properties, report_len_file=results_dir+'/'+len_file),
         shape='cube',
         size=[0.1,0.1,0.1],
         mode='a')

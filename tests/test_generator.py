@@ -48,7 +48,7 @@ def test_paser_nets():
     'compress_routes' : False,
     }
 
-    nets = get_nets(i_file, tlef_property=net_property, debug=db, testing=True)
+    nets = get_nets(i_file, '', tlef_property=net_property, debug=db, testing=True)
 
     print(nets)
     print([x.print_net() for x in nets])
@@ -64,7 +64,7 @@ def test_write_nets():
 
     o_file = os.getcwd()+'/test_output/test_1_2in_routes.scad'
 
-    nets = get_nets(i_file, testing=True)
+    nets = get_nets(i_file, 'test_1_2in', testing=True)
 
     #write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1])
     write_nets(o_file, nets)
@@ -79,7 +79,7 @@ def test_write_nets_2():
 
     o_file = os.getcwd()+'/test_output/test_2_3in_routes.scad'
 
-    nets = get_nets(i_file, testing=True)
+    nets = get_nets(i_file,'test_2_3in', testing=True)
 
     #write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1])
     write_nets(o_file, nets)
@@ -158,7 +158,7 @@ union(){fb}
     of.write(bulk_statement)
     of.close()
 
-    nets = get_nets(i_file, testing=True)
+    nets = get_nets(i_file, 'test_1_2in', testing=True)
     write_nets(o_file, nets, mode='a')
 
     comps = get_components(i_file)
