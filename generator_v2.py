@@ -6,6 +6,8 @@ import re
 import mmap
 import argparse
 
+# custom classes
+import lef_component_class as lcc
 from generator_class import * 
 
 #import solid
@@ -169,11 +171,15 @@ def write_pins(o_file, pin_list, bulk, tlef_properties, mets, mode='w+', debug=F
     ["PIN"], ["net", "{p.net}"],
 {pc_route}{nl});
 """)
+    return pin_list
 
 
-def get_components(in_def):
+def get_components(in_def, in_lef_merged=None):
     
     mod_re = bytes(comp_block_reg, 'utf-8')
+
+    if not isinstance(in_lef_merged, type(None)):
+        lefs_c = lcc.Lef_list(in_lef_merged)
 
     # parse template
     with open(in_def, 'r+') as f:
@@ -194,6 +200,10 @@ def get_components(in_def):
             dir=l.group('dir').decode('utf-8'),
             #def_scale=net_property['def_scale']
         )
+
+        # get port locations
+        if not isinstance(in_lef_merged, type(None)):
+            nc.add_pins(lef_c[nc.comp].pins)
 
         comp_list.append(nc)
     return comp_list
@@ -267,6 +277,8 @@ def write_components(o_file, comp_list, layer_h, px, mode="w+", pcell_file=None)
     
     """)
 
+    return comp_list
+
 # hard coded properties
 net_property = {
     'px':0.0076,
@@ -277,7 +289,7 @@ net_property = {
 }
 
 
-def get_nets(in_def, design, tlef=None, tlef_property=None, report_len_file=None, debug={}, testing=False):
+def get_nets(in_def, design, tlef=None, tlef_property=None, report_len_file=None, pins=None, components=None, debug={}, testing=False):
     mod_re = bytes(nets_block_reg, 'utf-8')
     tlef_f = './def_test/test_1.tlef'
     #mod_re = regex.compile(nets_block_reg, re.MULTILINE)
@@ -373,7 +385,7 @@ def get_nets(in_def, design, tlef=None, tlef_property=None, report_len_file=None
         if 'compress_routes' in debug and debug['compress_routes']==True:
             n.compress_routes(debug=True, design=design)
         else:
-            n.compress_routes(design=design)
+            n.compress_routes(design=design, pins=pins, components=components)
 
     if report_len_file is not None:
         route_len_dict = {}
@@ -631,7 +643,7 @@ routing_use = ['polychannel_v2', 'routing']
 def main(platform, design, def_file, results_dir, px, layer, 
          bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, 
          def_scale, pitch, res, dimm_file, tlef, comp_file=None, 
-         pin_con_dir_f=None, transparent=False):
+         pin_con_dir_f=None, pcell_file=None, transparent=False):
     
     print("""
     --------------------------------
@@ -677,15 +689,8 @@ layer = {layer};
     # initial bulk generation
     write_bulk(o_file, bulk, transparent, mode='a')
 
-    # write nets (routes)
-    write_nets(o_file,
-        get_nets(def_file, design, tlef, net_properties, report_len_file=results_dir+'/'+len_file),
-        shape='cube',
-        size=[0.1,0.1,0.1],
-        mode='a')
-
     # write components
-    write_components(o_file,
+    comp_list = write_components(o_file,
         get_components(def_file),
         net_property['layer'],
         net_property['px'],
@@ -693,12 +698,27 @@ layer = {layer};
         pcell_file=pcell_file)
 
     # write pin vias
-    write_pins(o_file,
+    io_list = write_pins(o_file,
         get_pins(def_file, pin_con_dir_f),
         bulk,
         net_properties,
         mets,
         mode='a')
+
+    # write nets (routes)
+    write_nets(o_file,
+        get_nets(def_file, 
+            design, 
+            tlef, 
+            net_properties, 
+            report_len_file=results_dir+'/'+len_file,
+            pins=None, 
+            components=None),
+        shape='cube',
+        size=[0.1,0.1,0.1],
+        mode='a',
+        pins=io_list,
+        components=comp_list)
 
     with open(o_file, 'a') as of:
         of.write(f"""
