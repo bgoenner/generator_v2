@@ -1,4 +1,4 @@
-
+# fmt:off
 import os, sys
 import shutil
 
@@ -547,7 +547,7 @@ def write_imports(o_file, comp_file, routing_use, scad_lib_dir='.', copy=False, 
     elif isinstance(routing_use, str):
         #of.write(f"use <{scad_lib_dir}/{routing_use}.scad\n>")
         if copy and results_dir != None:
-            shutil.copy(f"{scad_lib_dir}/{routing_use}.scad", 
+            shutil.copy(f"{scad_lib_dir}/{routing_use}.scad",
                 f"{results_dir}/{routing_use}.scad")
             of.write(f"use <./{routing_use}.scad>\n")
         else:
@@ -631,7 +631,7 @@ routing_use = ['polychannel_v2', 'routing']
 def main(platform, design, def_file, results_dir, px, layer, 
          bttm_layer, lpv, xbulk, ybulk, zbulk, xchip, ychip, 
          def_scale, pitch, res, dimm_file, tlef, comp_file=None, 
-         pin_con_dir_f=None, transparent=False):
+         pin_con_dir_f=None, transparent=False, pcell_file=None):
     
     print("""
     --------------------------------
