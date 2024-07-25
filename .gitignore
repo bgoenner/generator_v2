@@ -1,7 +1,10 @@
 
 .vscode
 .pytest_cache
+.flake8
 __pycache__
 tests_output
 env
 routes_out_*
+parser.out
+parsetab.py

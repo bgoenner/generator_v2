@@ -1,4 +1,4 @@
-
+# fmt:off
 import json
 import regex, mmap, re
 import networkx as nx
@@ -34,7 +34,7 @@ class Nets:
 
         # tlef definitions
 
-    def add_route(self, 
+    def add_route(self,
         layer = None,
         x1 = None,
         y1 = None,
@@ -48,14 +48,18 @@ class Nets:
             self.needs_layers_converted = True
         elif isinstance(z1, float):
             pass
-        
+        nr = None
+        print(" x2:",x2," via:", via)
+
         if (via is not None) and (x2 is not None):
-            ValueError("Cannot both define 'via' and 'x2'")
+            raise ValueError("Cannot both define 'via' and 'x2'")
         # check stars
         elif x2 is not None:
             nr = [[x1, y1, z1], [x2, y2, z2]]
         elif via is not None:
             nr = [[x1, y1, z1], [via]]
+        if nr is None:
+            raise ValueError("Not able to assign route a value")
 
         #print('Adding route: '+str(nr))
         self.route.append(nr)
@@ -82,11 +86,11 @@ class Nets:
                 r_lenx = abs(in_route[i-1][0] - in_route[i][0])**2
                 r_leny = abs(in_route[i-1][1] - in_route[i][1])**2
                 r_lenz = abs(in_route[i-1][2] - in_route[i][2])**2
-                r_len += (r_lenx+r_leny+r_lenz)**(1/2) 
+                r_len += (r_lenx+r_leny+r_lenz)**(1/2)
 
         return r_len
         #self.route_len = r_len
-            
+
     def calc_len(self):
         print(f"calc len {self.net}")
         print(self.route.nodes)
@@ -103,7 +107,7 @@ class Nets:
         if self.route_len == 0:
             self.calc_len()
         return self.route_len
-            
+
     def report_route_graph(self):
         return nx.node_link_data(self.route)
 
@@ -137,11 +141,12 @@ class Nets:
                     l_list = list(reversed(l_list))
                     # reinsert list
                     if head:
-                        r_list = l_lsit+r_list[ii:]
+                        r_list = l_list+r_list[ii:]
                     else:
                         r_list = r_list[:ii]+l_list
-                    
-                    if debug: print("new list: "+r_list)
+
+                    if debug:
+                        print("new list: "+r_list)
                 else:
                     if head:
                         r_list.insert(0, node)
@@ -408,7 +413,7 @@ class Nets:
 
             if len(self.route) < 1:
                 break
-                    
+
             if debug: print('\n')
             count += 1
             if count > 100:
@@ -441,7 +446,7 @@ class Nets:
                 self.tail_link = None
                 super().__init__()
             def can_insert(self):
-                return (self.head_link is not None and 
+                return (self.head_link is not None and
                     self.tail_link is not None)
 
         class main_list(list):
@@ -471,7 +476,7 @@ class Nets:
             # todo inserted in the center
             else:
                 return False
-        
+
         def check_inter(r_list, node):
             if len(r_list) > 4:
                 if node in r_list[2:-3]:
@@ -507,7 +512,7 @@ class Nets:
                 elif add_list_of_list(loose_r, r):
                     pass
                     # check changed loose lists to be inserted
-                
+
                 else:
                     # create new list
                     loose_r.append(r)
@@ -516,7 +521,7 @@ class Nets:
         if debug:
             print("Final routes:")
             print(self.route)
-                    
+
 
     def print_routes(self):
         pass
@@ -545,7 +550,7 @@ class NetBuilder:
         self.layer= layer
         self.lpv  = lpv
         self.def_scale  = def_scale
-        self.bot_layers = bottom_layers 
+        self.bot_layers = bottom_layers
 
         self.net = None
         self.vias= {}
@@ -556,7 +561,7 @@ class NetBuilder:
 
 
     def import_tlef(self, tlef_f):
-        
+
         print(tlef_f)
         # get layers
         layer_re = r'LAYER\s*(?P<layer_name>\w*)\s*(?|(?:TYPE\s*(?P<type>(?:ROUTING|CUT))\s*;|DIRECTION\s*(?P<direction>(?:HORIZONTAL|VERTICAL))\s*;|MINWIDTH\s*(?P<minwidth>[\d.]*)\s*;|WIDTH\s*(?P<width>[\d.]*)\s*;)\s*)*END\s*(\w*)\s$' 
@@ -585,7 +590,7 @@ class NetBuilder:
         with open(tlef_f, 'r+') as f:
             data = mmap.mmap(f.fileno(), 0)
             mo_v = regex.finditer(via_re, data, re.MULTILINE)
-            
+
             for m in mo_v:
                 #print(m.group(0))
                 v_m = []
@@ -596,7 +601,7 @@ class NetBuilder:
                 print("import via "+m.group('via_name').decode('utf-8')+"\n"+str(v_m))
                 self.vias[m.group('via_name').decode('utf-8')] = v_m
 
-    def get_vias_met(self, via):        
+    def get_vias_met(self, via):
         met_v = []
         for v in self.vias[via]:
             if v in self.met_layers:
@@ -606,7 +611,7 @@ class NetBuilder:
 
     # expects a json met config or dictionary
     def import_met(self, config=None, met_f=None):
-        
+
         if config is not None:
             if isinstance(config, dict):
                 self.met_layers = config
@@ -616,7 +621,7 @@ class NetBuilder:
         if met_f is not None:
             raise ValueError('met_f not currently implemented')
 
-    def add_route(self, 
+    def add_route(self,
         layer = None,
         x1 = None,
         y1 = None,
@@ -649,7 +654,7 @@ class NetBuilder:
             if convert_layer:
                 z1 = (self.bot_layers + self.met_layers[layer]*self.lpv)*self.layer
             else:
-                z1 = layer    
+                z1 = layer
             z2 = z1
 
             if x2 == '*':
@@ -661,10 +666,11 @@ class NetBuilder:
 
             x2 = float(x2)/self.def_scale*self.px
             y2 = float(y2)/self.def_scale*self.px
-            
+
             if debug:
                 print("Add route x2: "+str([[x1, y1, z1],[x2, y2, z2]]))
-        self.net.add_route(layer, x1, y1, z1, x2, y2, z2, convert_layer)
+        self.net.add_route(layer, x1, y1, z1, x2, y2, z2)
+        # self.net.add_route(layer, x1, y1, z1, x2, y2, z2, convert_layer)
 
     def convert_route(self, route):
         for i, r in enumerate(route):
@@ -674,14 +680,15 @@ class NetBuilder:
         return self.net
 
 class Component:
-    
+
     def __init__(self,
         name=None,
         comp=None,
         x1=None,
         y1=None,
-        dir=None):
-        
+        dir=None
+                 ):
+
         self.name = name
         self.comp = comp
         self.x1   = x1#/def_scale
@@ -784,4 +791,3 @@ class Pin:
             return True
         else:
             False
-
