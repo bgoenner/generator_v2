@@ -65,12 +65,16 @@ class Nets:
         self.route.append(nr)
 
     def calc_len_funct(self, in_route=None):
-        if isinstance(in_route, list):
-            pass
-        elif isinstance(in_route, type(None)):
+        if isinstance(in_route, type(None)):
             in_route=self.route
+
+        if isinstance(in_route, list):
+            if len(in_route) == 0:
+                raise Exception(f"Empty route {in_route}")
+            else:
+                pass
         else:
-            raise ValueError(f'in_route is {type(in_route)}; should be lsit')
+            raise ValueError(f'in_route is {type(in_route)}; should be list')
 
         if not self.compress:
             raise Exception("Routes need compression")
@@ -79,8 +83,8 @@ class Nets:
         r_len = 0
         for i, r in enumerate(in_route):
             if i == 0:
-                print(len(in_route))
-                print(in_route)
+                # print(len(in_route))
+                print("in_route:",in_route, ", len:", len(in_route))
                 continue
             else:
                 r_lenx = abs(in_route[i-1][0] - in_route[i][0])**2
@@ -93,12 +97,15 @@ class Nets:
 
     def calc_len(self):
         print(f"calc len {self.net}")
-        print(self.route.nodes)
         if isinstance(self.route, nx.Graph):
+            print(self.route.nodes)
             len_dict = {}
             for nd in self.route.nodes:
                 if 'route' in self.route.nodes[nd]:
+                    print(self.route.nodes[nd]['route'])
                     len_dict[nd] = self.calc_len_funct(self.route.nodes[nd]['route'])
+                else:
+                    print('skipping length calc for', nd)
             self.route_len = len_dict
         else:
             self.route_len = self.calc_len_funct()
@@ -114,17 +121,43 @@ class Nets:
     def convert_layers(self, net_builder):
         if isinstance(self.add_route, list):
             self.route = net_builder.convert_route(self.route)
-        if isinstance(self.route, nx.Graph):
+        elif isinstance(self.route, nx.Graph):
             for r_node in self.route.nodes:
-                r_node['route'] = net_builder.convert_route(self.route.nodes[r_node]['route'])
+                if 'route' not in self.route.nodes[r_node]:
+                    print(f'skipping {r_node}, no routes')
+                    continue
+                print("converting route: ",self.net,':', r_node)
+                net_builder.convert_route(self.route.nodes[r_node]['route'])
+                # print(new_r)
+                # self.route.nodes[r_node]['route'] = new_r
+        else:
+            raise Exception("Invalid route type")
+        self.needs_layers_converted = False
+
+                # self.route[r_node]['route'] = \
+                #     net_builder.convert_route(self.route.nodes[r_node]['route'])
 
 
-    def compress_routes(self, debug=False, design='', pins=None, components=None, report_route=True, subsegment=True):
+    def compress_routes(self, debug=False, design='', pins=None, component_list=None, components_lef=None, report_route=True, subsegment=True):
 
         if self.compress:
             raise Exception("Routes already compressed")
 
         self.compress = True
+
+        #TODO pass as variable
+        s = 7.6/1000 # hard coded scale
+
+        if components_lef is not None:
+            if component_list is not None:
+                print("Component list not passed!!!!")
+            import component_parse
+            # with open(components_lef, 'r') as f:
+            # component pins can be checked by
+            # def is_pt_in_pins(self, pt, pos=None, layer=None):
+            #get_comp_pins_from_lef
+            # comp_dict = component_parse.ComponentParser().parser_multi_file(components_lef)
+            comp_dict = component_parse.ComponentParser().get_comp_pins_from_lef(components_lef, scale=s)
 
         def check_inner(r_list, node, head=False):
             # that inner node is not inside
@@ -218,18 +251,45 @@ class Nets:
 
             def get_dev(pt):
                 # check pins
-                if 'PIN' in self.devs:
-                    for p in pins:
-                        if p in self.devs:
-                            p.is_point_in_pin(pt)
-                            return p
-                # check components
-                for comp in components:
-                    if comp in self.devs:
-                        comp.is_point_in_ports(pt)
+                if components_lef is None:
+                    raise Exception("Lef not imported, cannot check component pins")
+                if component_list is None:
+                    raise Exception("Component list not passed, cannot check component pins")
+                # for c in component_list:
+                print(f"Checking devs in {self.net}")
+                for d in self.devs:
+                    c = None
+                    for c_i in component_list:
+                        if d['dev'] == c_i.name:
+                            c = c_i
+                    if c is None:
+                        continue
+                    c_pos = [float(c.x1)*c.lef_cv, float(c.y1)*c.lef_cv]
+                    print(f'Checking {pt} in {c.name} as {c_pos} {c.dir}')
+                    is_in_c, comp = comp_dict[c.comp].is_pt_in_pins(
+                        [float(pt[0]),float(pt[1])],
+                        pos=c_pos,
+                        orient=c.dir,
+                        layer=pt[2],
+                        err=0.01
+                    )
+                    if is_in_c:
+                        print("Found", comp, "in net", self.net,"!")
                         return comp
-                    else: # skip
-                        pass
+                return None
+
+                # if 'PIN' in self.devs:
+                #     for p in pins:
+                #         if p in self.devs:
+                #             p.is_point_in_pin(pt)
+                #             return p
+                # # check components
+                # for comp in components:
+                #     if comp in self.devs:
+                #         comp.is_point_in_ports(pt)
+                #         return comp
+                #     else: # skip
+                #         pass
 
             #for ind, seg in enumerate(d_routes):
             #    seg_return = check_if_ends_in_route(self.route, seg['route'])
@@ -250,13 +310,20 @@ class Nets:
             #    if dr_head_in_r[ind] and dr_tail_in_r[ind]: # stop once ends are found
             #        break
 
+            #################### BEGIN FUNCTION subsegment ######################
+
             # check d_routes
+
+            """
+            This for loop checks that routing of a new and tags the
+            breakpoints where subsegments intersect
+            """
 
             # TODO what if a break is at another break
             for ind_ends, dr_ends in enumerate(in_routes):
                 for ind_srch, dr_srch in enumerate(in_routes):
                     if ind_ends == ind_srch: # this means we are checking the same route, skip
-                        continue 
+                        continue
                     seg_return, out_pt, out_pt_ind = check_ends_in_route(dr_ends['route'], dr_srch['route'])
                     if seg_return == "head":
                         #dr_head_in_r[ind_ends] = ind_ch
@@ -269,10 +336,11 @@ class Nets:
                         in_routes[ind_srch]['break'].append({'pt_ind':out_pt_ind ,'pt':out_pt, 'r_ind':[[ind_ends, 'tail']]})
                     if in_routes[ind_ends]['head'] and in_routes[ind_ends]['tail']: # stop once ends are found
                         break
-            
-            new_routes = {}
+
+            # new_routes = {}
             # break routes
-            
+
+            #################### BEGIN FUNCTION subsegment ######################
 
             net_G = nx.Graph()
             if debug: print(f"Subsegment net {self.net}")
@@ -291,7 +359,7 @@ class Nets:
                         net_G.nodes[new_node]['route'] = r_t['route'][last_br_ind:br_pt['pt_ind']+1]
                     else:
                         net_G.add_node(f'{ind}_{br_count}', route=r_t['route'][last_br_ind:br_pt['pt_ind']+1])
-                    
+
                     net_G.add_edge(f'{ind}_{br_count}', f'br_{ind}_{br_count}')
                     net_G.add_edge(f'{ind}_{br_count+1}', f'br_{ind}_{br_count}')
                     # check if node is at 0 or 1; this adds the branching route node and edge
@@ -303,7 +371,7 @@ class Nets:
                         elif ch_end[1] == "tail": # we assume last seg is # of break pts
                             net_G.add_edge(f'{ch_end[0]}_{num_br}', f'br_{ind}_{br_count}')
                     if debug: print(f"branch route {new_node}: {net_G.nodes[new_node]['route']}")
-                    
+
                     last_br_ind = br_pt['pt_ind']
                     # create final route
                     if ind == len(r_t['break'])-1:
@@ -320,14 +388,18 @@ class Nets:
                     else:
                         net_G.add_node(f'{ind}_0', route=r_t['route'])
 
-                if r_t['head'] == False:
-                    r_t['head'] == {'dev':get_dev(r_t['route'][0])}
-                if r_t['tail'] == False:
-                    r_t['tail'] == {'dev':get_dev(r_t['route'][-1])}
-            
-            return net_G
-            
+                if component_list is not None and components_lef is not None:
+                    if r_t['head'] is False:
+                        r_t['head'] == {'dev':get_dev(r_t['route'][0])}
+                        print(r_t)
+                    if r_t['tail'] is False:
+                        r_t['tail'] == {'dev':get_dev(r_t['route'][-1])}
+                        print(r_t)
 
+            return net_G
+
+
+        #################### BEGIN FUNCTION compress_routes ######################
 
         nr = []
         d_routes = []
@@ -340,7 +412,7 @@ class Nets:
             print(self.route)
 
         #while len(nr) + sum([len(x['route']) for x in d_routes]) < r_len+1:
-        #while len(self.route) > 1:    
+        #while len(self.route) > 1:
         while True:
             #print(len(self.route))
             if debug: print("sr:"+str(len(self.route))+":"+str(self.route))
@@ -646,7 +718,7 @@ class NetBuilder:
                 z2 = (self.bot_layers + self.met_layers[v[1]]*self.lpv)*self.layer
             else:
                 z1 = v[0]
-                z2 = v[0]
+                z2 = v[1]
 
             if debug:
                 print("Add route v: "+str([[x1, y1, z1],[x2, y2, z2]]))
@@ -674,7 +746,11 @@ class NetBuilder:
 
     def convert_route(self, route):
         for i, r in enumerate(route):
-            route[i][3] = (self.bot_layers + self.met_layers[r[3]]*self.lpv)*self.layer
+            # print(r)
+            # print(self.met_layers[r[2]])
+            if isinstance(r[2], str):
+                route[i][2] = (self.bot_layers + self.met_layers[r[2]]*self.lpv)*self.layer
+        # return route
 
     def export_net(self):
         return self.net
@@ -686,7 +762,8 @@ class Component:
         comp=None,
         x1=None,
         y1=None,
-        dir=None
+        dir=None,
+        conversion_factor=None
                  ):
 
         self.name = name
@@ -694,6 +771,10 @@ class Component:
         self.x1   = x1#/def_scale
         self.y1   = y1#/def_scale
         self.dir  = dir
+        if conversion_factor is None:
+            self.lef_cv = 7.6/1000000 # hard coded for testing
+        else:
+            self.lef_cv = conversion_factor
         self.pins = {}
 
     def add_pins(self, in_pins):
@@ -735,7 +816,7 @@ class Component:
 
 
 class Pin:
-    
+
     def __init__(self,
         name=None,
         net=None,
@@ -745,7 +826,7 @@ class Pin:
         fixed=[0,0,''],
         connect_dir=None,
         layer_z_pos=None):
-        
+
         self.name = name
         self.net  = net
         self.direction = direction

@@ -326,7 +326,7 @@ class ComponentParser:
         # for c in p_out.items():
         # print(c[0], c[1].values())
 
-    def get_comp_pins_from_lef(self, in_file):
+    def get_comp_pins_from_lef(self, in_file, scale=1):
         par_f = self.parser_multi_file(in_file)
         if len(par_f) == 0:
             raise Exception(f"No macros in file: '{in_file}'")
@@ -340,7 +340,7 @@ class ComponentParser:
                 print(pin[1]["PORT"]["RECT"], pin[1]["PORT"]["LAYER"])
                 pins = pins | {
                     pin[0]: {
-                        pos: pin[1]["PORT"]["RECT"],
+                        pos: [[j * scale for j in i] for i in pin[1]["PORT"]["RECT"]],
                         layer: pin[1]["PORT"]["LAYER"],
                     }
                     # p
@@ -348,50 +348,74 @@ class ComponentParser:
                     # for p in pin[1]["PORT"]["RECT"]
                     # ]
                 }
-            c_list[c[0]] = Component(c[0], pins)
+            c_list[c[0]] = Component(c[0], pins, [i * scale for i in c[1]["SIZE"]])
         return c_list
 
 
 class Component:
 
-    def __init__(self, macro, pins):
+    def __init__(self, macro, pins, size):
         self.macro = macro
         self.pins = pins
+        self.size = size
 
-    def get_pins_from_pos(self, pos):
+    def get_pins_from_pos(self, pos, orient=None, rescale=1):
         import copy
+
+        if orient is None:
+            orient = "N"
 
         new_pin_pos = copy.deepcopy(self.pins)
         for p in self.pins.items():
             for i, pt in enumerate(p[1]["pos"]):
-                new_pin_pos[p[0]]["pos"][i] = [pt[0] + pos[0], pt[1] + pos[1]]
+                if orient == "N":
+                    new_pin_pos[p[0]]["pos"][i] = [
+                        (pt[0] + pos[0]) * rescale,
+                        (pt[1] + pos[1]) * rescale,
+                    ]
+                elif orient == "FN":
+                    new_pin_pos[p[0]]["pos"][i] = [
+                        (self.size[0] - pt[0] + pos[0]) * rescale,
+                        (pt[1] + pos[1]) * rescale,
+                    ]
+                elif orient == "S":
+                    new_pin_pos[p[0]]["pos"][i] = [
+                        (pt[0] + pos[0]) * rescale,
+                        (self.size[1] - pt[1] + pos[1]) * rescale,
+                    ]
+                elif orient == "FS":
+                    new_pin_pos[p[0]]["pos"][i] = [
+                        (self.size[0] - pt[0] + pos[0]) * rescale,
+                        (self.size[1] - pt[1] + pos[1]) * rescale,
+                    ]
 
         return new_pin_pos
 
-    def is_pt_in_rect(self, pt, rect):
+    def is_pt_in_rect(self, pt, rect, err=0.0):
         if (
-            pt[0] > rect[0][0]
-            and pt[0] < rect[1][0]
-            and pt[1] > rect[0][1]
-            and pt[1] < rect[1][1]
+            pt[0] > rect[0][0] - err
+            and pt[0] < rect[1][0] + err
+            and pt[1] > rect[0][1] - err
+            and pt[1] < rect[1][1] + err
         ):
             return True
         else:
             return False
 
-    def is_pt_in_pins(self, pt, pos=None, layer=None):
+    def is_pt_in_pins(self, pt, pos=None, orient=None, layer=None, rescale=1, err=0.0):
         if pos is None:
             pos = [0, 0]
-        ref_pins = self.get_pins_from_pos(pos)
+        ref_pins = self.get_pins_from_pos(pos, orient, rescale)
         for p in ref_pins.items():
-            if self.is_pt_in_rect(pt, p[1]["pos"]):
+            print("Component pin:", p[0], p[1]["pos"])
+            if self.is_pt_in_rect(pt, p[1]["pos"], err):
                 if layer is None:
                     return True, p[0]
                 elif isinstance(layer, str) and layer == p[1]["layer"]:
                     return True, p[0]
                 else:
                     continue
-        return False
+        return False, None
 
 
 def test_load_file():
@@ -429,7 +453,7 @@ def test_is_pt_in_pin():
 
 if __name__ == "__main__":
 
-    # test_load_file()
+    test_load_file()
     # test_load_multi_file()
     # test_load_components_and_pins()
-    test_is_pt_in_pin()
+    # test_is_pt_in_pin()

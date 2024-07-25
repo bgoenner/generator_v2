@@ -1,30 +1,25 @@
-
 ## global definitions
 
-bulk = {
-    'x':2550,
-    'y':1590,
-    'z':280
-}
+bulk = {"x": 2550, "y": 1590, "z": 280}
 
 net_property = {
-    'px':0.0076,
-    'layer':0.010,
-    'lpv':20,
-    'def_scale':1000,
-    'bot_layers':20
+    "px": 0.0076,
+    "layer": 0.010,
+    "lpv": 20,
+    "def_scale": 1000,
+    "bot_layers": 20,
 }
 
 mets = {
-    'met1':0,
-    'met2':1,
-    'met3':2,
-    'met4':3,
-    'met5':4,
-    'met6':5,
-    'met7':6,
-    'met8':7,
-    'met9':8,
+    "met1": 0,
+    "met2": 1,
+    "met3": 2,
+    "met4": 3,
+    "met5": 4,
+    "met6": 5,
+    "met7": 6,
+    "met8": 7,
+    "met9": 8,
 }
 
 
@@ -34,21 +29,15 @@ def test_paser_nets():
 
     from generator_v2 import get_nets
 
-    i_file = os.getcwd()+'/def_test/test_1_2in.def'
+    i_file = os.getcwd() + "/def_test/test_1_2in.def"
 
-    net_property = {
-    'px':1,
-    'layer':1,
-    'lpv':1,
-    'def_scale':1,
-    'bot_layers':0
-    }
+    net_property = {"px": 1, "layer": 1, "lpv": 1, "def_scale": 1, "bot_layers": 0}
 
     db = {
-    'compress_routes' : False,
+        "compress_routes": False,
     }
 
-    nets = get_nets(i_file, '', tlef_property=net_property, debug=db, testing=True)
+    nets = get_nets(i_file, "", tlef_property=net_property, debug=db, testing=True)
 
     print(nets)
     print([x.print_net() for x in nets])
@@ -60,14 +49,15 @@ def test_write_nets():
 
     from generator_v2 import write_nets, get_nets
 
-    i_file = os.getcwd()+'/def_test/test_1_2in.def'
+    i_file = os.getcwd() + "/def_test/test_1_2in.def"
 
-    o_file = os.getcwd()+'/test_output/test_1_2in_routes.scad'
+    o_file = os.getcwd() + "/test_output/test_1_2in_routes.scad"
 
-    nets = get_nets(i_file, 'test_1_2in', testing=True)
+    nets = get_nets(i_file, "test_1_2in", testing=True)
 
-    #write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1])
+    # write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1])
     write_nets(o_file, nets)
+
 
 def test_write_nets_2():
 
@@ -75,14 +65,15 @@ def test_write_nets_2():
 
     from generator_v2 import write_nets, get_nets
 
-    i_file = os.getcwd()+'/def_test/test_2_3in.def'
+    i_file = os.getcwd() + "/def_test/test_2_3in.def"
 
-    o_file = os.getcwd()+'/test_output/test_2_3in_routes.scad'
+    o_file = os.getcwd() + "/test_output/test_2_3in_routes.scad"
 
-    nets = get_nets(i_file,'test_2_3in', testing=True)
+    nets = get_nets(i_file, "test_2_3in", testing=True)
 
-    #write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1])
+    # write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1])
     write_nets(o_file, nets)
+
 
 def test_write_comps():
 
@@ -90,13 +81,13 @@ def test_write_comps():
 
     from generator_v2 import write_components, get_components
 
-    i_file = os.getcwd()+'/def_test/test_1_2in.def'
+    i_file = os.getcwd() + "/def_test/test_1_2in.def"
 
-    o_file = os.getcwd()+'/test_output/test_1_2in_comp.scad'
+    o_file = os.getcwd() + "/test_output/test_1_2in_comp.scad"
 
     comps = get_components(i_file)
 
-    #write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1])
+    # write_nets(o_file, net_list, shape='cube', size=[0.1, 0.1, 0.1])
     write_components(o_file, comps, 0.030, 0.010)
 
 
@@ -104,25 +95,27 @@ def test_parser_pins():
     import os
     from generator_v2 import get_pins
 
-    i_file = os.getcwd()+'/def_test/test_1_2in.def'
-    pin_f  = os.getcwd()+'/support_libs/pins.csv'
+    i_file = os.getcwd() + "/def_test/test_1_2in.def"
+    pin_f = os.getcwd() + "/support_libs/pins.csv"
 
     pins = get_pins(i_file, pin_f)
     print(pins)
+
 
 def test_write_pins():
 
     import os
     from generator_v2 import get_pins, write_pins
 
-    i_file = os.getcwd()+'/def_test/test_1_2in.def'
-    pin_f  = os.getcwd()+'/support_libs/pins.csv'
+    i_file = os.getcwd() + "/def_test/test_1_2in.def"
+    pin_f = os.getcwd() + "/support_libs/pins.csv"
 
-    o_file = os.getcwd()+'/test_output/test_1_2in_pin.scad'
+    o_file = os.getcwd() + "/test_output/test_1_2in_pin.scad"
 
     pins = get_pins(i_file, pin_f)
 
     write_pins(o_file, pins, bulk, net_property, mets, debug=True)
+
 
 def test_combine_nets_comps_pins():
 
@@ -134,8 +127,8 @@ px    = 7.6e-3;
 layer = 10e-3;
 """
 
-    fb = '{'
-    bb = '}'
+    fb = "{"
+    bb = "}"
 
     bulk_statement = f"""
 difference(){fb}
@@ -144,28 +137,33 @@ union(){fb}
 """
 
     import os
-    from generator_v2 import write_components, get_components, write_nets, get_nets, write_pins, get_pins 
+    from generator_v2 import (
+        write_components,
+        get_components,
+        write_nets,
+        get_nets,
+        write_pins,
+        get_pins,
+    )
 
+    i_file = os.getcwd() + "/def_test/test_1_2in.def"
+    pin_f = os.getcwd() + "/support_libs/pins.csv"
 
+    o_file = os.getcwd() + "/test_output/test_1_2in_comb.scad"
 
-    i_file = os.getcwd()+'/def_test/test_1_2in.def'
-    pin_f  = os.getcwd()+'/support_libs/pins.csv'
-
-    o_file = os.getcwd()+'/test_output/test_1_2in_comb.scad'
-
-    of = open(o_file, 'w+')
+    of = open(o_file, "w+")
     of.write(use_statement)
     of.write(bulk_statement)
     of.close()
 
-    nets = get_nets(i_file, 'test_1_2in', testing=True)
-    write_nets(o_file, nets, mode='a')
+    nets = get_nets(i_file, "test_1_2in", testing=True)
+    write_nets(o_file, nets, mode="a")
 
     comps = get_components(i_file)
-    write_components(o_file, comps, 0.030, 0.010, mode='a')
+    write_components(o_file, comps, 0.030, 0.010, mode="a")
 
     pins = get_pins(i_file, pin_f)
-    write_pins(o_file, pins, bulk, net_property, mets, mode='a')
+    write_pins(o_file, pins, bulk, net_property, mets, mode="a")
 
     interconnect_statement = f"""
 {bb}
@@ -173,9 +171,10 @@ union(){fb}
 %interconnect_32channel(2550/2, 1590/2, 280);;
 """
 
-    of = open(o_file, 'a')
+    of = open(o_file, "a")
     of.write(interconnect_statement)
     of.close()
+
 
 def test_main():
 
@@ -183,53 +182,57 @@ def test_main():
     from generator_v2 import main
 
     main(
-    platform='h.r.3.3_pdk', 
-    design='test_1_2in', 
-    def_file='def_test/test_1_2in.def', 
-    results_dir='test_output/main_test', 
-    px=0.0076, 
-    layer=0.01, 
-    bttm_layer=20, 
-    lpv=20, 
-    xbulk=2550, 
-    ybulk=1590, 
-    zbulk=280, 
-    xchip=[0, 2550], 
-    ychip=[0, 1590], 
-    def_scale=1000, 
-    pitch=30, 
-    res=120, 
-    dimm_file=None, 
-    comp_file="support_libs/h.r.3.3_pdk_merged.scad",
-    tlef="def_test/test_1.tlef",
-    pin_con_dir_f='support_libs/pins.csv')
-    
+        platform="h.r.3.3_pdk",
+        design="test_1_2in",
+        def_file="def_test/test_1_2in.def",
+        results_dir="test_output/main_test",
+        px=0.0076,
+        layer=0.01,
+        bttm_layer=20,
+        lpv=20,
+        xbulk=2550,
+        ybulk=1590,
+        zbulk=280,
+        xchip=[0, 2550],
+        ychip=[0, 1590],
+        def_scale=1000,
+        pitch=30,
+        res=120,
+        dimm_file=None,
+        comp_file="support_libs/h.r.3.3_pdk_merged.scad",
+        tlef="def_test/test_1.tlef",
+        pin_con_dir_f="support_libs/pins.csv",
+    )
+
+
 def test_2_main():
 
     import os
     from generator_v2 import main
 
     main(
-    platform='h.r.3.3_pdk', 
-    design='test_2_3in', 
-    def_file='def_test/test_2_3in.def', 
-    results_dir='test_output/main_test', 
-    px=0.0076, 
-    layer=0.01, 
-    bttm_layer=20, 
-    lpv=20, 
-    xbulk=2550, 
-    ybulk=1590, 
-    zbulk=280, 
-    xchip=[0, 2550], 
-    ychip=[0, 1590], 
-    def_scale=1000, 
-    pitch=30, 
-    res=120, 
-    dimm_file=None,
-    tlef="def_test/test_1.tlef",
-    comp_file="support_libs/h.r.3.3_pdk_merged.scad", 
-    pin_con_dir_f='support_libs/pins_2.csv')
+        platform="h.r.3.3_pdk",
+        design="test_2_3in",
+        def_file="def_test/test_2_3in.def",
+        results_dir="test_output/main_test",
+        px=0.0076,
+        layer=0.01,
+        bttm_layer=20,
+        lpv=20,
+        xbulk=2550,
+        ybulk=1590,
+        zbulk=280,
+        xchip=[0, 2550],
+        ychip=[0, 1590],
+        def_scale=1000,
+        pitch=30,
+        res=120,
+        dimm_file=None,
+        tlef="def_test/test_1.tlef",
+        comp_file="support_libs/h.r.3.3_pdk_merged.scad",
+        pin_con_dir_f="support_libs/pins_2.csv",
+    )
+
 
 def test_3_main():
 
@@ -237,51 +240,57 @@ def test_3_main():
     from generator_v2 import main
 
     main(
-    platform='h.r.3.3_pdk', 
-    design='test_3', 
-    def_file='def_test/test_3.def', 
-    results_dir='test_output/main_test', 
-    px=0.0076, 
-    layer=0.01, 
-    bttm_layer=20, 
-    lpv=20, 
-    xbulk=2550, 
-    ybulk=1590, 
-    zbulk=280, 
-    xchip=[0, 2550], 
-    ychip=[0, 1590], 
-    def_scale=1000, 
-    pitch=30, 
-    res=120, 
-    dimm_file=None,
-    tlef="def_test/test_1.tlef",
-    comp_file="support_libs/h.r.3.3_pdk_merged.scad", 
-    pin_con_dir_f='support_libs/pins_2.csv')
-    
+        platform="h.r.3.3_pdk",
+        design="test_3",
+        def_file="def_test/test_3.def",
+        results_dir="test_output/main_test",
+        px=0.0076,
+        layer=0.01,
+        bttm_layer=20,
+        lpv=20,
+        xbulk=2550,
+        ybulk=1590,
+        zbulk=280,
+        xchip=[0, 2550],
+        ychip=[0, 1590],
+        def_scale=1000,
+        pitch=30,
+        res=120,
+        dimm_file=None,
+        tlef="def_test/test_1.tlef",
+        comp_file="support_libs/h.r.3.3_pdk_merged.scad",
+        pin_con_dir_f="support_libs/pins_2.csv",
+        add_comp_to_routes=True,
+        component_merge_lef="def_test/mfda_30px_merged.lef",
+    )
+
+
 def test_3_main_pcell():
 
     import os
     from generator_v2 import main
 
     main(
-    platform='h.r.3.3_pdk', 
-    design='test_3p', 
-    def_file='def_test/test_3p.def', 
-    results_dir='test_output/main_test', 
-    px=0.0076, 
-    layer=0.01, 
-    bttm_layer=20, 
-    lpv=20, 
-    xbulk=2550, 
-    ybulk=1590, 
-    zbulk=280, 
-    xchip=[0, 2550], 
-    ychip=[0, 1590], 
-    def_scale=1000, 
-    pitch=30, 
-    res=120, 
-    dimm_file=None,
-    tlef="def_test/test_1.tlef",
-    comp_file="support_libs/h.r.3.3_pdk_merged.scad", 
-    pin_con_dir_f='support_libs/pins_2.csv',
-    pcell_file='def_test/pcell_out_scad')
+        platform="h.r.3.3_pdk",
+        design="test_3p",
+        def_file="def_test/test_3p.def",
+        results_dir="test_output/main_test",
+        px=0.0076,
+        layer=0.01,
+        bttm_layer=20,
+        lpv=20,
+        xbulk=2550,
+        ybulk=1590,
+        zbulk=280,
+        xchip=[0, 2550],
+        ychip=[0, 1590],
+        def_scale=1000,
+        pitch=30,
+        res=120,
+        dimm_file=None,
+        tlef="def_test/test_1.tlef",
+        comp_file="support_libs/h.r.3.3_pdk_merged.scad",
+        pin_con_dir_f="support_libs/pins_2.csv",
+        pcell_file="def_test/pcell_out_scad",
+    )
+
