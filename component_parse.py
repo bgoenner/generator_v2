@@ -337,7 +337,7 @@ class ComponentParser:
             # print(c[1]["PIN"])
             pins = {}
             for pin in c[1]["PIN"].items():
-                print(pin[1]["PORT"]["RECT"], pin[1]["PORT"]["LAYER"])
+                # print(pin[1]["PORT"]["RECT"], pin[1]["PORT"]["LAYER"])
                 pins = pins | {
                     pin[0]: {
                         pos: [[j * scale for j in i] for i in pin[1]["PORT"]["RECT"]],
@@ -348,6 +348,7 @@ class ComponentParser:
                     # for p in pin[1]["PORT"]["RECT"]
                     # ]
                 }
+            print("SIZE:", [i * scale for i in c[1]["SIZE"]])
             c_list[c[0]] = Component(c[0], pins, [i * scale for i in c[1]["SIZE"]])
         return c_list
 
@@ -359,11 +360,8 @@ class Component:
         self.pins = pins
         self.size = size
 
-    def get_pins_from_pos(self, pos, orient=None, rescale=1):
+    def get_pins_from_pos(self, pos, orient="N", rescale=1):
         import copy
-
-        if orient is None:
-            orient = "N"
 
         new_pin_pos = copy.deepcopy(self.pins)
         for p in self.pins.items():
@@ -378,12 +376,14 @@ class Component:
                         (self.size[0] - pt[0] + pos[0]) * rescale,
                         (pt[1] + pos[1]) * rescale,
                     ]
-                elif orient == "S":
+                elif orient == "FS":
+                    # print(pos)
+                    # print(self.size[1], pt[1], self.size[1] - pt[1])
                     new_pin_pos[p[0]]["pos"][i] = [
                         (pt[0] + pos[0]) * rescale,
-                        (self.size[1] - pt[1] + pos[1]) * rescale,
+                        ((self.size[1] - pt[1]) + pos[1]) * rescale,
                     ]
-                elif orient == "FS":
+                elif orient == "S":
                     new_pin_pos[p[0]]["pos"][i] = [
                         (self.size[0] - pt[0] + pos[0]) * rescale,
                         (self.size[1] - pt[1] + pos[1]) * rescale,
@@ -402,9 +402,9 @@ class Component:
         else:
             return False
 
-    def is_pt_in_pins(self, pt, pos=None, orient=None, layer=None, rescale=1, err=0.0):
-        if pos is None:
-            pos = [0, 0]
+    def is_pt_in_pins(
+        self, pt, pos=[0, 0], orient=None, layer=None, rescale=1, err=0.0
+    ):
         ref_pins = self.get_pins_from_pos(pos, orient, rescale)
         for p in ref_pins.items():
             print("Component pin:", p[0], p[1]["pos"])
@@ -418,6 +418,9 @@ class Component:
         return False, None
 
 
+#################### TESTING FUNCTIONS ###########################
+
+
 def test_load_file():
     test_file = "def_test/comp_1.lef"
     p = ComponentParser().parser_file(test_file)
@@ -426,7 +429,9 @@ def test_load_file():
 
 def test_load_multi_file():
     test_file = "def_test/mfda_30px_merged.lef"
-    ComponentParser().parser_multi_file(test_file)
+    p = ComponentParser().parser_multi_file(test_file)
+    for c in p.items():
+        print(c[0], c[1])
 
 
 def test_load_components_and_pins():
@@ -435,6 +440,16 @@ def test_load_components_and_pins():
     for c in cs.items():
         print(c[1].get_pins_from_pos([1000, 1000]))
         print(c[1].get_pins_from_pos([0, 0]))
+
+
+def test_load_components_and_shift():
+    test_file = "def_test/mfda_30px_merged.lef"
+    cs = ComponentParser().get_comp_pins_from_lef(test_file)
+    for c in cs.items():
+        print(c[1].get_pins_from_pos([0, 0], orient="N"))
+        print(c[1].get_pins_from_pos([0, 0], orient="FN"))
+        print(c[1].get_pins_from_pos([0, 0], orient="S"))
+        print(c[1].get_pins_from_pos([0, 0], orient="FS"))
 
 
 def test_is_pt_in_pin():
@@ -453,7 +468,8 @@ def test_is_pt_in_pin():
 
 if __name__ == "__main__":
 
-    test_load_file()
+    # test_load_file()
     # test_load_multi_file()
     # test_load_components_and_pins()
+    test_load_components_and_shift()
     # test_is_pt_in_pin()

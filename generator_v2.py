@@ -389,9 +389,9 @@ def get_nets(in_def, design, tlef=None, tlef_property=None, report_len_file=None
             n.compress_routes(debug=True, design=design)
         else:
             if components is None:
-                n.compress_routes(design=design, pins=pins)
+                n.compress_routes(design=design, pin_list=pins)
             else:
-                n.compress_routes(design=design, pins=pins, component_list=components, components_lef=component_lef)
+                n.compress_routes(design=design, pin_list=pins, component_list=components, components_lef=component_lef)
 
     if report_len_file is not None:
         route_len_dict = {}
@@ -722,7 +722,7 @@ layer = {layer};
             tlef,
             net_properties,
             report_len_file=results_dir+'/'+len_file,
-            pins=None,
+            pins=io_list if add_comp_to_routes else None,
             components=comp_list if add_comp_to_routes else None,
             component_lef = component_merge_lef),
         shape='cube',

@@ -4,19 +4,21 @@ import regex, mmap, re
 import networkx as nx
 
 # custom classes
-import lef_component_class as lcc
+# import lef_component_class as lcc
+
 
 class Nets:
-    
+
     def __init__(
-            self,
-            net = None,
-            devs = None,
-            #dev1 = None,
-            #p1 = None,
-            #dev2 = None,
-            #p2 = None,
-            ):
+        self,
+        net = None,
+        devs = None,
+        #dev1 = None,
+        #p1 = None,
+        #dev2 = None,
+        #p2 = None,
+        ):
+
         self.net = net
         #self.dev1 = dev1
         #self.p1   = p1
@@ -42,14 +44,16 @@ class Nets:
         x2 = None,
         y2 = None,
         z2 = None,
-        via= None):
+        via= None,
+        debug = False
+                  ):
 
         if isinstance(z1, str):
             self.needs_layers_converted = True
         elif isinstance(z1, float):
             pass
         nr = None
-        print(" x2:",x2," via:", via)
+        if debug: print(" x2:",x2," via:", via)
 
         if (via is not None) and (x2 is not None):
             raise ValueError("Cannot both define 'via' and 'x2'")
@@ -84,7 +88,7 @@ class Nets:
         for i, r in enumerate(in_route):
             if i == 0:
                 # print(len(in_route))
-                print("in_route:",in_route, ", len:", len(in_route))
+                # print("in_route:",in_route, ", len:", len(in_route))
                 continue
             else:
                 r_lenx = abs(in_route[i-1][0] - in_route[i][0])**2
@@ -116,6 +120,17 @@ class Nets:
         return self.route_len
 
     def report_route_graph(self):
+        print("Reporting routing graph")
+        for r in list(self.route.nodes):
+            # print("head",self.route.nodes[r]['head'])
+            if 'tail' in self.route.nodes[r]:
+                print("tail",self.route.nodes[r]['tail'], 'at', r)
+                self.route.add_node(self.route.nodes[r]['tail'], component='')
+                self.route.add_edge(r, self.route.nodes[r]['tail'])
+            if 'head' in self.route.nodes[r]:
+                print("head",self.route.nodes[r]['head'], 'at', r)
+                self.route.add_node(self.route.nodes[r]['head'], component='')
+                self.route.add_edge(r, self.route.nodes[r]['head'])
         return nx.node_link_data(self.route)
 
     def convert_layers(self, net_builder):
@@ -138,7 +153,7 @@ class Nets:
                 #     net_builder.convert_route(self.route.nodes[r_node]['route'])
 
 
-    def compress_routes(self, debug=False, design='', pins=None, component_list=None, components_lef=None, report_route=True, subsegment=True):
+    def compress_routes(self, debug=False, design='', component_list=None, components_lef=None, pin_list=None, report_route=True, subsegment=True):
 
         if self.compress:
             raise Exception("Routes already compressed")
@@ -147,6 +162,8 @@ class Nets:
 
         #TODO pass as variable
         s = 7.6/1000 # hard coded scale
+        s1 = s/1000 # hard coded scale
+        err = 0.05
 
         if components_lef is not None:
             if component_list is not None:
@@ -242,41 +259,68 @@ class Nets:
                 in_routes.append({'route':dr['route'], 'head':False, 'tail':False, 'break':[]})
 
             def check_ends_in_route(route_ends_check, targ_route):
+                def check_pt_vec(p1, p2, acc):
+                    if isinstance(p1[2], str) and isinstance(p2[2], str):
+                        return abs(p1[0]-p2[0])<acc and \
+                            abs(p1[1]-p2[1])<acc and \
+                            p1[2] == p2[2]
+                    else:
+                        return abs(p1[0]-p2[0])<acc and \
+                            abs(p1[1]-p2[1])<acc and \
+                            abs(p1[2]-p2[2])<acc
+                pt_acc = 1e-4
                 for ind, pt in enumerate(targ_route):
-                    if route_ends_check[0] == pt:
+                    if check_pt_vec(route_ends_check[0], pt, pt_acc):
                         return "head", pt, ind
-                    elif route_ends_check[-1] == pt:
+                    if check_pt_vec(route_ends_check[-1], pt, pt_acc):
+                        # elif abs(route_ends_check[-1] - pt) < pt_acc:
                         return "tail", pt, ind
                 return False, None, None
 
-            def get_dev(pt):
+            def get_dev(pt, ind=0):
                 # check pins
                 if components_lef is None:
                     raise Exception("Lef not imported, cannot check component pins")
                 if component_list is None:
                     raise Exception("Component list not passed, cannot check component pins")
                 # for c in component_list:
-                print(f"Checking devs in {self.net}")
+                print(f"Checking devs in {self.net}, ind: {ind}")
+                print(f"devs: {self.devs}")
                 for d in self.devs:
                     c = None
+                    # check if device is valid component
                     for c_i in component_list:
                         if d['dev'] == c_i.name:
                             c = c_i
+                    # TODO check for pins
+                    # if d['dev'] in pin_list.keys():
+                    if d['dev'] == "PIN":
+                        p = pin_list[d['port']]
+                        pos = [[(float(p.fx1)+float(p.lx1))*s1, (float(p.fy1)+float(p.ly1))*s1],
+                               [(float(p.fx1)+float(p.lx2))*s1, (float(p.fy1)+float(p.ly2))*s1]]
+                        print(f"Checking pin {d['port']} at {pos}")
+                        if float(pt[0]) > pos[0][0] - err\
+                            and float(pt[0]) < pos[1][0] + err \
+                            and float(pt[1]) > pos[0][1] - err \
+                            and float(pt[1]) < pos[0][1] + err \
+                            and pt[2] == p.layer:
+                            print("Found", d['port'], "in net", self.net,"!")
+                            return d['port']
                     if c is None:
                         continue
                     c_pos = [float(c.x1)*c.lef_cv, float(c.y1)*c.lef_cv]
-                    print(f'Checking {pt} in {c.name} as {c_pos} {c.dir}')
+                    print(f'Checking {pt} in {c.name} at {c_pos} {c.dir}')
                     is_in_c, comp = comp_dict[c.comp].is_pt_in_pins(
                         [float(pt[0]),float(pt[1])],
                         pos=c_pos,
                         orient=c.dir,
                         layer=pt[2],
-                        err=0.01
+                        err=err
                     )
                     if is_in_c:
-                        print("Found", comp, "in net", self.net,"!")
-                        return comp
-                return None
+                        print("Found", c.name, "in net", self.net,"!")
+                        return c.name
+                return False
 
                 # if 'PIN' in self.devs:
                 #     for p in pins:
@@ -340,7 +384,6 @@ class Nets:
             # new_routes = {}
             # break routes
 
-            #################### BEGIN FUNCTION subsegment ######################
 
             net_G = nx.Graph()
             if debug: print(f"Subsegment net {self.net}")
@@ -390,11 +433,18 @@ class Nets:
 
                 if component_list is not None and components_lef is not None:
                     if r_t['head'] is False:
-                        r_t['head'] == {'dev':get_dev(r_t['route'][0])}
-                        print(r_t)
+                        r_t['head'] = get_dev(r_t['route'][0], ind)
+                        # r_t['head'] = {'dev':get_dev(r_t['route'][0], ind)}
+                        if r_t['head'] is not False:
+                            print(r_t)
+                            net_G.nodes[f'{ind}_0']['head'] = r_t['head']
                     if r_t['tail'] is False:
-                        r_t['tail'] == {'dev':get_dev(r_t['route'][-1])}
-                        print(r_t)
+                        r_t['tail'] = get_dev(r_t['route'][-1], ind)
+                        # r_t['tail'] = {'dev':get_dev(r_t['route'][-1], ind)}
+                        if r_t['tail'] is not False:
+                            print(r_t)
+                            num_br = len(in_routes[ind]["break"])
+                            net_G.nodes[f'{ind}_{num_br}']['tail'] = r_t['tail']
 
             return net_G
 
@@ -634,7 +684,7 @@ class NetBuilder:
 
     def import_tlef(self, tlef_f):
 
-        print(tlef_f)
+        print(f"Importing TECH_LEF: {tlef_f}")
         # get layers
         layer_re = r'LAYER\s*(?P<layer_name>\w*)\s*(?|(?:TYPE\s*(?P<type>(?:ROUTING|CUT))\s*;|DIRECTION\s*(?P<direction>(?:HORIZONTAL|VERTICAL))\s*;|MINWIDTH\s*(?P<minwidth>[\d.]*)\s*;|WIDTH\s*(?P<width>[\d.]*)\s*;)\s*)*END\s*(\w*)\s$' 
         layer_re = bytes(layer_re, 'utf-8')
@@ -777,43 +827,43 @@ class Component:
             self.lef_cv = conversion_factor
         self.pins = {}
 
-    def add_pins(self, in_pins):
-        for pin in in_pins:
-            new_pin = {'layer':'', 'type':'', 'params':''}
-            new_pin['layer'] = in_pin[pin]['layer']
-            new_pin['type'] = in_pin[pin]['type']
-            if new_pin['type'] == 'RECT':
-                for i, x in enumerate(in_pin[pin]['params']):
-                    if i%2:
-                        new_pin['params'] = str(self.x1+int(x))
-                    else:
-                        new_pin['params'] = str(self.y1+int(x))
-            elif new_pin['type'] == 'POLYGON' or \
-                new_pin['type'] == 'PATH':
-                print(f'{new_pin["type"]} not supported')
-
-    def is_point_in_ports(self, pt, no_pin_ok=False, unsupported_type_ok=False):
-        if len(self.pins) == 0:
-            if not no_pin_ok:
-                Exception("No pins")
-            else:
-                return False
-
-        for p in self.pins.items():
-            if p['type'] == 'RECT':
-                if p['layer'] == pt[2] and \
-                    p['param'][0] > pt[0] and \
-                    p['param'][1] > pt[1] and \
-                    p['param'][2] > pt[0] and \
-                    p['param'][3] > pt[1]:
-                    return True
-            elif p['type'] == 'POLYGON' or \
-                p['type'] == 'PATH':
-                print(f"{p['type']} is not supported")
-                if not unsupported_type_ok:
-                    Exception(f"{p['type']} is not supported")
-        return False
-
+    # def add_pins(self, in_pins):
+    #     for pin in in_pins:
+    #         new_pin = {'layer':'', 'type':'', 'params':''}
+    #         new_pin['layer'] = in_pin[pin]['layer']
+    #         new_pin['type'] = in_pin[pin]['type']
+    #         if new_pin['type'] == 'RECT':
+    #             for i, x in enumerate(in_pin[pin]['params']):
+    #                 if i%2:
+    #                     new_pin['params'] = str(self.x1+int(x))
+    #                 else:
+    #                     new_pin['params'] = str(self.y1+int(x))
+    #         elif new_pin['type'] == 'POLYGON' or \
+    #             new_pin['type'] == 'PATH':
+    #             print(f'{new_pin["type"]} not supported')
+    #
+    # def is_point_in_ports(self, pt, no_pin_ok=False, unsupported_type_ok=False):
+    #     if len(self.pins) == 0:
+    #         if not no_pin_ok:
+    #             Exception("No pins")
+    #         else:
+    #             return False
+    #
+    #     for p in self.pins.items():
+    #         if p['type'] == 'RECT':
+    #             if p['layer'] == pt[2] and \
+    #                 p['param'][0] > pt[0] and \
+    #                 p['param'][1] > pt[1] and \
+    #                 p['param'][2] > pt[0] and \
+    #                 p['param'][3] > pt[1]:
+    #                 return True
+    #         elif p['type'] == 'POLYGON' or \
+    #             p['type'] == 'PATH':
+    #             print(f"{p['type']} is not supported")
+    #             if not unsupported_type_ok:
+    #                 Exception(f"{p['type']} is not supported")
+    #     return False
+    #
 
 class Pin:
 
@@ -825,7 +875,8 @@ class Pin:
         l_size=[0,0,0,0],
         fixed=[0,0,''],
         connect_dir=None,
-        layer_z_pos=None):
+        layer_z_pos=None
+                 ):
 
         self.name = name
         self.net  = net
@@ -834,7 +885,7 @@ class Pin:
         self.lx1 = l_size[0]
         self.ly1 = l_size[1]
         self.lx2 = l_size[2]
-        self.l2y = l_size[3]
+        self.ly2 = l_size[3]
         self.fx1 = fixed[0]
         self.fy1 = fixed[1]
         self.fdir = fixed[2]
