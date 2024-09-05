@@ -139,7 +139,7 @@ class Nets:
         elif isinstance(self.route, nx.Graph):
             for r_node in self.route.nodes:
                 if 'route' not in self.route.nodes[r_node]:
-                    print(f'skipping {r_node}, no routes')
+                    print(f'skipping {r_node} in {self.net}, no routes')
                     continue
                 print("converting route: ",self.net,':', r_node)
                 net_builder.convert_route(self.route.nodes[r_node]['route'])
@@ -169,6 +169,10 @@ class Nets:
             if component_list is not None:
                 print("Component list not passed!!!!")
             import component_parse
+            import os
+            
+
+            os.environ["XYCE_WL_GRAPH"] = ''
             # with open(components_lef, 'r') as f:
             # component pins can be checked by
             # def is_pt_in_pins(self, pt, pos=None, layer=None):
@@ -264,6 +268,8 @@ class Nets:
             pt and pt_ind are of the target route
             """
             def check_ends_in_route(route_ends_check, targ_route):
+                def seg_sl(lofl, l_ind):
+                    return [a[l_ind] for a in lofl]
                 def check_pt_vec(p1, p2, acc):
                     if isinstance(p1[2], str) and isinstance(p2[2], str):
                         return abs(p1[0]-p2[0])<acc and \
@@ -273,13 +279,48 @@ class Nets:
                         return abs(p1[0]-p2[0])<acc and \
                             abs(p1[1]-p2[1])<acc and \
                             abs(p1[2]-p2[2])<acc
+                # assume either x1 == x2 or y1 == y2
+                def check_pt_in_segment(p1, seg, acc):
+                    print(f"Check pair {seg} for {p1}")
+                    if isinstance(p1[2], str) and isinstance(seg[0][2], str) and isinstance(seg[1][2], str):
+                        return p1[0] > min(seg_sl(seg, 0))-acc and \
+                            p1[0] < max(seg_sl(seg, 0))+acc and \
+                            p1[1] > min(seg_sl(seg, 1))-acc and \
+                            p1[1] < max(seg_sl(seg, 1))+acc and \
+                            (p1[2] == seg[0][2] or p1[2] == seg[1][2])
+                            #abs(p1[0] - seg[1][0])<acc and \
+                            #abs(p1[1])<acc and \
+                    elif isinstance(p1[2], float) and isinstance(seg[0][2], float) and isinstance(seg[1][2], float):
+                        return p1[0] > min(seg_sl(seg, 0))-acc and \
+                            p1[0] < max(seg_sl(seg, 0))+acc and \
+                            p1[1] > min(seg_sl(seg, 1))-acc and \
+                            p1[1] < max(seg_sl(seg, 1))+acc and \
+                            p1[2] < max(seg_sl(seg, 2))+acc and \
+                            p1[2] > min(seg_sl(seg, 2))-acc
+                        # return abs(p1[0])<acc and \
+                        #     abs(p1[1])<acc and \
+                        #     abs(p1[2])<acc
+                    else:
+                        raise ValueError(f"mixed pt definitions: {p1}, {seg}")
+                ### START check ends in route
                 pt_acc = err
+                prev_pt= None
                 for ind, pt in enumerate(targ_route):
                     if check_pt_vec(route_ends_check[0], pt, pt_acc):
                         return "head", pt, ind
-                    if check_pt_vec(route_ends_check[-1], pt, pt_acc):
+                    elif check_pt_vec(route_ends_check[-1], pt, pt_acc):
                         # elif abs(route_ends_check[-1] - pt) < pt_acc:
                         return "tail", pt, ind
+                    # check between route segments
+                    elif (prev_pt is not None) and check_pt_in_segment(route_ends_check[0], [pt, prev_pt], pt_acc):
+                        return "head_ins", route_ends_check[0], ind
+                        pass
+                    elif (prev_pt is not None) and check_pt_in_segment(route_ends_check[-1], [pt, prev_pt], pt_acc):
+                        return "tail_ins", route_ends_check[-1], ind
+                        pass
+                    else:
+                        prev_pt = pt
+
                 return False, None, None
 
             # index does not have a functional impact useful for debugging
@@ -372,21 +413,47 @@ class Nets:
             breakpoints where subsegments intersect
             """
 
+            print("Subsegmenting route:", self.net)
             # TODO what if a break is at another break
             for ind_ends, dr_ends in enumerate(in_routes):
                 for ind_srch, dr_srch in enumerate(in_routes):
                     if ind_ends == ind_srch: # this means we are checking the same route, skip
                         continue
+                    # returns (1) type of return (2) pt value (3) index on segment
                     seg_return, out_pt, out_pt_ind = check_ends_in_route(dr_ends['route'], dr_srch['route'])
                     if seg_return == "head":
-                        #dr_head_in_r[ind_ends] = ind_ch
+                        # dr_head_in_r[ind_ends] = ind_ch
                         in_routes[ind_ends]['head'] = ind_srch
                         # TODO check if exists, ifso append
                         in_routes[ind_srch]['break'].append({'pt_ind':out_pt_ind ,'pt':out_pt, 'r_ind':[[ind_ends, 'head']]})
                     elif seg_return == "tail":
-                        #dr_tail_in_r[ind_ends] = ind_ch
+                        # dr_tail_in_r[ind_ends] = ind_ch
                         in_routes[ind_ends]['tail'] = ind_srch
                         in_routes[ind_srch]['break'].append({'pt_ind':out_pt_ind ,'pt':out_pt, 'r_ind':[[ind_ends, 'tail']]})
+                    elif seg_return == "head_ins":
+                        in_routes[ind_srch]['route'].insert(out_pt_ind, out_pt)
+                        # move break_pts after
+                        for br_pts in in_routes[ind_srch]['break']:
+                            if br_pts['pt_ind'] >= out_pt_ind:
+                                br_pts['pt_ind'] += 1
+                        in_routes[ind_ends]['head'] = ind_srch  # points segment end to attached segment
+                        in_routes[ind_srch]['break'].append({
+                            'pt_ind': out_pt_ind,
+                            'pt': out_pt,
+                            'r_ind': [[ind_ends, 'head']]
+                        })
+                    elif seg_return == "tail_ins":
+                        in_routes[ind_srch]['route'].insert(out_pt_ind, out_pt)
+                        # move break_pts after
+                        for br_pts in in_routes[ind_srch]['break']:
+                            if br_pts['pt_ind'] >= out_pt_ind:
+                                br_pts['pt_ind'] += 1
+                        in_routes[ind_ends]['tail'] = ind_srch  # points segment end to attached segment
+                        in_routes[ind_srch]['break'].append({
+                            'pt_ind': out_pt_ind,
+                            'pt': out_pt,
+                            'r_ind': [[ind_ends, 'tail']]
+                        })
                     if in_routes[ind_ends]['head'] and in_routes[ind_ends]['tail']: # stop once ends are found
                         break
             if components_lef is not None:
@@ -394,9 +461,10 @@ class Nets:
                 print("-- Checking for internal devs -", self.net)
                 for ind_srch, dr_srch in enumerate(in_routes):
                     for pt_ind, pt in enumerate(dr_srch['route'][1:-1]):
-                        #print(pt)
+                        # print(pt)
                         dev_out = get_dev(pt, supress_output=True)
                         if dev_out is not False:
+                            # TODO change pin -> port
                             in_routes[ind_srch]['break'].append({'pt_ind':pt_ind ,'pt':pt, 'r_ind':[[dev_out, 'pin']]})
                             break
 
@@ -414,7 +482,7 @@ class Nets:
                 r_t['break'] = sorted(r_t['break'], key=lambda k : k['pt_ind'])
                 if debug: print(f'breaks for {ind}: ', r_t['break'])
                 if debug: print(f'route: {r_t["route"]}')
-                for br_pt in r_t['break']:
+                for br_ind, br_pt in enumerate(r_t['break']):
                     new_node = f'{ind}_{br_count}'
                     # check if node exists; they can be created through add_edge
                     if new_node in net_G.nodes:
@@ -443,6 +511,11 @@ class Nets:
                     if debug: print(f"branch route {new_node}: {net_G.nodes[new_node]['route']}")
 
                     last_br_ind = br_pt['pt_ind']
+                    # for last route in list
+                    #if br_pt == len(r_t['break'])-1:
+                    if br_ind == len(r_t['break'])-1:
+                        net_G.nodes[f'{ind}_{br_count+1}']['route'] = r_t['route'][last_br_ind:]
+
                     # create final route
                     if ind == len(r_t['break'])-1:
                         # last element is == to len? (but it works??? vvvv)
